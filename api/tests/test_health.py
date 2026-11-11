@@ -13,13 +13,13 @@ from api.main import app, health
 def test_app_metadata() -> None:
     """Verify application metadata is properly configured."""
     assert app.title == "Object Detection API"
-    assert app.version == "0.1.0"
+    assert app.version == "1.0.0"
 
 
 @pytest.mark.stage0
 def test_healthz_route_registered() -> None:
     """Verify the /healthz route is registered in the routing table."""
-    route_paths = [route.path for route in app.routes]  # type: ignore[attr-defined]
+    route_paths = list(app.openapi()["paths"].keys())
     assert "/healthz" in route_paths
 
 
@@ -27,4 +27,5 @@ def test_healthz_route_registered() -> None:
 def test_health_handler_response() -> None:
     """Verify the health handler returns the expected status payload."""
     payload = health()
-    assert payload == {"status": "ok"}
+    assert payload["status"] == "ok"
+    assert payload["model_loaded"] is True

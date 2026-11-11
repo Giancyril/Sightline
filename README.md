@@ -74,8 +74,8 @@ cd web && npm install && npm run dev
 | **3** | Baseline inference — COCO-pretrained SSD | ✅ Done |
 | **4** | Fine-tuning — detection head on Open Images subset | ✅ Done |
 | **5** | Evaluation — mAP, error analysis, threshold tuning | ✅ Done |
-| **6** | Inference API — FastAPI endpoints, OpenAPI docs | ⬜ In Progress |
-| **7** | Frontend — React UI with canvas overlay, webcam | ⬜ |
+| **6** | Inference API — FastAPI endpoints, OpenAPI docs | ✅ Done |
+| **7** | Frontend — React UI with canvas overlay, webcam | ⬜ In Progress |
 | **8** | Integration tests & CI — Playwright, contract tests | ⬜ |
 | **9** | Packaging — Docker, model card, README, v1.0.0 | ⬜ |
 
