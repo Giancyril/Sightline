@@ -271,3 +271,4 @@ export const DetectView: React.FC<DetectViewProps> = ({ onSaveHistory }) => {
     </div>
   );
 };
+

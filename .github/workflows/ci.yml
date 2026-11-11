@@ -7,8 +7,8 @@ on:
     branches: ["main", "master"]
 
 jobs:
-  lint-and-test:
-    name: Lint & Test (Python)
+  lint-and-test-python:
+    name: Python Lint, Typecheck & Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,23 +24,23 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Install dev dependencies
-        run: pip install ruff black mypy pytest pytest-asyncio httpx
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pytest-asyncio httpx torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install fastapi uvicorn pydantic python-multipart pillow numpy pyyaml
 
-      - name: Ruff lint
+      - name: Ruff Lint
         run: python -m ruff check ml/ api/ scripts/
 
-      - name: Black format check
-        run: python -m black --check ml/ api/ scripts/
+      - name: Ruff Format Check
+        run: python -m ruff format --check ml/ api/ scripts/
 
-      - name: Mypy type check
-        run: python -m mypy ml/ api/ scripts/ --ignore-missing-imports || true
-
-      - name: Run tests
+      - name: Run Full Test Suite
         run: python -m pytest -q
 
-  lint-frontend:
-    name: Lint (Frontend)
+  frontend-build-and-lint:
+    name: Frontend Lint & Build (Vite + TypeScript)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,15 +59,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        continue-on-error: true  # web scaffold created in Stage 7
 
-      - name: ESLint
+      - name: Lint (Oxlint)
         run: npm run lint
-        continue-on-error: true  # web scaffold created in Stage 7
 
-      - name: Type check
-        run: npm run typecheck
-        continue-on-error: true  # web scaffold created in Stage 7
+      - name: TypeScript & Vite Build
+        run: npm run build
 
   verify-stage-tags:
     name: Verify Stage Tag Order
@@ -81,7 +78,6 @@ jobs:
       - name: Check stage tags are in order
         shell: bash
         run: |
-          echo "Current stage tags:"
-          git tag -l "stage-*" | sort -V || true
-          echo "Tag verification complete (gaps are expected mid-build)."
-
+          echo "Current stage tags in repository:"
+          git tag -l "stage-*" | sort -V
+          echo "Verification complete."

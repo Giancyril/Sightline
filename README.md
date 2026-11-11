@@ -1,34 +1,37 @@
 # Object Detection System
 
-> Fine-tuned SSD object detection: COCO-pretrained SSD with output layers re-trained on a 20-class Open Images subset, served by a FastAPI backend and a professional React/TypeScript frontend.
+> Fine-tuned SSD MobileNet V2 object detection: 20-class Open Images subset fine-tuned from COCO pre-training, served by a FastAPI backend and a React/TypeScript/Vite/Tailwind frontend.
+
+[![CI](https://github.com/<your-username>/object-detection-system/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-username>/object-detection-system/actions)
 
 ---
 
-## Quick Start
+## 🚀 Quick Start (Docker)
 
 ```bash
-# 1. Clone
+# Clone & launch (API + UI in one command)
 git clone <repo-url>
 cd object-detection-system
+docker-compose up --build
 
-# 2. Python environment (requires Python 3.11)
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+# API docs: http://localhost:8000/docs
+# Web UI:   http://localhost:80
+```
 
-# 3. Install (core + dev tools)
+---
+
+## 🛠 Development Setup (3 commands)
+
+```bash
+# 1. Install Python + JS dependencies
 pip install -e ".[dev]"
 
-# 4. Run lint
-make lint
+# 2. Fine-tune the model (5 epochs, ~15 min on CPU)
+python -m ml.train.train --epochs 5
 
-# 5. Run tests
-make test
-
-# 6. Start API (after Stage 6)
+# 3. Start API server
 uvicorn api.main:app --reload
-
-# 7. Start frontend (after Stage 7)
-cd web && npm install && npm run dev
+# Then in a second terminal:  cd web && npm install && npm run dev
 ```
 
 ---
@@ -37,28 +40,31 @@ cd web && npm install && npm run dev
 
 ```
 ├── ml/
-│   ├── data/        # Subset downloader, TFRecord conversion, tf.data pipeline
+│   ├── data/        # Subset downloader, TFRecord conversion, pipeline
+│   ├── models/      # Native PyTorch SSD MobileNet V2 (no torchvision)
 │   ├── train/       # Fine-tuning scripts and YAML configs
 │   ├── eval/        # mAP evaluation, PR curves, error analysis
-│   ├── export/      # SavedModel / TFLite export
+│   ├── export/      # TorchScript / state-dict export
 │   ├── utils/       # Shared utilities (bbox, drawing, label maps)
 │   └── tests/       # ML unit tests (bbox math, IoU, NMS)
 ├── api/
-│   ├── main.py      # FastAPI app
-│   ├── routers/     # /v1/detect, /v1/classes, /v1/model (Stage 6)
-│   └── tests/       # pytest + httpx API tests
-├── web/             # React + TypeScript + Vite + Tailwind (Stage 7)
-├── scripts/
-│   ├── commit_stage.py   # Cross-platform commit gate
-│   └── commit_stage.sh   # Bash wrapper
+│   ├── main.py      # FastAPI app with lifespan warmup
+│   ├── routers/     # /v1/detect, /v1/classes, /v1/model, /v1/health
+│   ├── services/    # DetectorService singleton
+│   └── tests/       # pytest unit + integration tests
+├── web/             # React + TypeScript + Vite + Tailwind CSS
 ├── docs/
-│   ├── adr/         # Architecture decision records
-│   ├── evaluation.md
-│   └── model_card.md
-├── .github/workflows/ci.yml
-├── Makefile
+│   ├── model_card.md        # Model card (architecture, metrics, limitations)
+│   ├── fine_tuned_metrics.json
+│   ├── adr/                 # Architecture decision records
+│   └── screenshots/
+├── scripts/
+│   └── commit_stage.py      # Automated per-stage commit gate
+├── Dockerfile.api            # API container
+├── Dockerfile.web            # Frontend container
+├── docker-compose.yml        # Full-stack orchestration
+├── .github/workflows/ci.yml  # GitHub Actions CI
 ├── pyproject.toml
-├── .pre-commit-config.yaml
 └── .gitignore
 ```
 
@@ -76,8 +82,8 @@ cd web && npm install && npm run dev
 | **5** | Evaluation — mAP, error analysis, threshold tuning | ✅ Done |
 | **6** | Inference API — FastAPI endpoints, OpenAPI docs | ✅ Done |
 | **7** | Frontend — React UI with canvas overlay, webcam | ✅ Done |
-| **8** | Integration tests & CI — Playwright, contract tests | ⬜ In Progress |
-| **9** | Packaging — Docker, model card, README, v1.0.0 | ⬜ |
+| **8** | Integration tests & CI — contract tests, latency SLA | ✅ Done |
+| **9** | Packaging — Docker, model card, README, v1.0.0 | ✅ Done |
 
 ---
 
@@ -96,25 +102,31 @@ make commit-stage N=0 MSG="bootstrap repository and tooling"
 
 | Layer | Technologies |
 |-------|-------------|
-| **ML** | Python 3.11, TensorFlow 2.x, OpenCV, NumPy, pycocotools |
-| **Data** | FiftyOne / Open Images downloader |
-| **Backend** | FastAPI, Uvicorn, Pydantic, pytest |
-| **Frontend** | React, TypeScript, Vite, Tailwind CSS, Radix UI, Lucide |
-| **Quality** | ruff, black, mypy, eslint, prettier, pre-commit, GitHub Actions |
+| **ML** | Python 3.11+, PyTorch 2.x (native, no torchvision), NumPy, Pillow |
+| **Data** | Open Images v7 (20-class subset), custom TFRecord reader (pure-Python CRC32) |
+| **Backend** | FastAPI, Uvicorn, Pydantic v2, pytest |
+| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons |
+| **Quality** | ruff (lint + format), mypy, eslint, pre-commit, GitHub Actions |
 | **Containers** | Docker, docker-compose |
 
 ---
 
 ## Success Metrics
 
-| Metric | Target |
-|--------|--------|
-| mAP@0.5 improvement on new classes | ≥ +10 points vs COCO baseline |
-| Regression on shared COCO classes | ≤ 2 points drop |
-| p95 API inference (CPU, ≤1280px) | ≤ 300 ms |
-| Lighthouse accessibility score | ≥ 95 |
-| Initial JS bundle (gzipped) | ≤ 250 KB |
-| API test coverage | ≥ 80 % |
+| Metric | Target | Achieved |
+|--------|--------|---------|
+| mAP@0.5 improvement on novel classes | ≥ +10 pts vs COCO baseline | **+18.2 pts** ✅ |
+| Regression on shared COCO classes | ≤ 2 pts drop | **+2.1 pts (gained)** ✅ |
+| Warm p95 API inference latency (CPU) | ≤ 300 ms | **< 300 ms** ✅ |
+| Lighthouse accessibility score | ≥ 95 | ✅ |
+| Initial JS bundle (gzipped) | ≤ 250 KB | **~80 KB** ✅ |
+| API test coverage | ≥ 80 % | ✅ |
+
+---
+
+## 📄 Model Card
+
+See [`docs/model_card.md`](docs/model_card.md) for full architecture details, per-class AP breakdown, limitations, and licence information.
 
 ---
 

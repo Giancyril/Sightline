@@ -86,3 +86,4 @@ export interface HistoryRecord {
   previewUrl: string;
   result: DetectionResponse;
 }
+

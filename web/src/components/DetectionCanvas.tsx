@@ -146,3 +146,4 @@ export const DetectionCanvas: React.FC<DetectionCanvasProps> = ({
     </div>
   );
 };
+

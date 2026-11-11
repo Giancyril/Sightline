@@ -202,3 +202,4 @@ for det in data["detections"]:
     </div>
   );
 };
+

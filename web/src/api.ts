@@ -58,3 +58,4 @@ export async function checkHealth(): Promise<{ status: string; model_loaded: boo
   }
   return response.json();
 }
+

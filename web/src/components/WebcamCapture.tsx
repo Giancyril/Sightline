@@ -130,3 +130,4 @@ export const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isProce
     </div>
   );
 };
+
