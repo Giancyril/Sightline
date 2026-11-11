@@ -69,11 +69,11 @@ cd web && npm install && npm run dev
 | Stage | Description | Status |
 |-------|-------------|--------|
 | **0** | Bootstrap — repo layout, tooling, CI | ✅ Done |
-| **1** | Data acquisition — Open Images 20-class subset, EDA | ⬜ |
-| **2** | Input pipeline — TFRecords, tf.data, augmentations | ⬜ |
-| **3** | Baseline inference — COCO-pretrained SSD | ⬜ |
-| **4** | Fine-tuning — detection head on Open Images subset | ⬜ |
-| **5** | Evaluation — mAP, error analysis, threshold tuning | ⬜ |
+| **1** | Data acquisition — Open Images 20-class subset, EDA | ✅ Done |
+| **2** | Input pipeline — TFRecords, tf.data, augmentations | ✅ Done |
+| **3** | Baseline inference — COCO-pretrained SSD | ✅ Done |
+| **4** | Fine-tuning — detection head on Open Images subset | ✅ Done |
+| **5** | Evaluation — mAP, error analysis, threshold tuning | ⬜ In Progress |
 | **6** | Inference API — FastAPI endpoints, OpenAPI docs | ⬜ |
 | **7** | Frontend — React UI with canvas overlay, webcam | ⬜ |
 | **8** | Integration tests & CI — Playwright, contract tests | ⬜ |

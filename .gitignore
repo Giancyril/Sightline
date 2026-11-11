@@ -63,7 +63,8 @@ ml/data/cache/
 /data/
 
 # Model Checkpoints, Weights, and Exports (>5MB limit)
-ml/checkpoints/
+ml/checkpoints/*
+!ml/checkpoints/*.json
 ml/export/saved_model/
 ml/export/*.tflite
 *.h5

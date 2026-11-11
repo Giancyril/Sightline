@@ -1,0 +1,55 @@
+{
+  "model": "ssd_mobilenet_v2_openimages20",
+  "total_epochs": 5,
+  "best_mAP_all": 0.25,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 22.2679,
+      "lr": 0.0005,
+      "mAP_all": 0.1815,
+      "mAP_coco_shared": 0.323,
+      "mAP_novel_classes": 0.04
+    },
+    {
+      "epoch": 2,
+      "train_loss": 20.1293,
+      "lr": 0.001,
+      "mAP_all": 0.2,
+      "mAP_coco_shared": 0.32,
+      "mAP_novel_classes": 0.08
+    },
+    {
+      "epoch": 3,
+      "train_loss": 18.2175,
+      "lr": 0.001,
+      "mAP_all": 0.2185,
+      "mAP_coco_shared": 0.317,
+      "mAP_novel_classes": 0.12
+    },
+    {
+      "epoch": 4,
+      "train_loss": 16.5254,
+      "lr": 0.0007525,
+      "mAP_all": 0.2375,
+      "mAP_coco_shared": 0.315,
+      "mAP_novel_classes": 0.16
+    },
+    {
+      "epoch": 5,
+      "train_loss": 15.4852,
+      "lr": 0.0002575,
+      "mAP_all": 0.25,
+      "mAP_coco_shared": 0.315,
+      "mAP_novel_classes": 0.185
+    }
+  ],
+  "final_metrics": {
+    "epoch": 5,
+    "train_loss": 15.4852,
+    "lr": 0.0002575,
+    "mAP_all": 0.25,
+    "mAP_coco_shared": 0.315,
+    "mAP_novel_classes": 0.185
+  }
+}

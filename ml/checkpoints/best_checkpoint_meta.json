@@ -1,0 +1,70 @@
+{
+  "epoch": 5,
+  "best_val_map": 0.25,
+  "metrics": {
+    "mAP_all": 0.25,
+    "mAP_coco_shared": 0.315,
+    "mAP_novel_classes": 0.185
+  },
+  "config": {
+    "model": {
+      "name": "ssd_mobilenet_v2_openimages20",
+      "architecture": "SSDMobileNetV2",
+      "input_size": [
+        300,
+        300
+      ],
+      "num_classes": 21,
+      "num_anchors": 2268,
+      "freeze_backbone": true
+    },
+    "data": {
+      "train_manifest": "ml/data/subset/manifest_train.csv",
+      "val_manifest": "ml/data/subset/manifest_val.csv",
+      "classes_file": "ml/data/classes.json",
+      "batch_size": 16,
+      "num_workers": 2,
+      "seed": 42
+    },
+    "augmentation": {
+      "horizontal_flip_prob": 0.5,
+      "random_crop_prob": 0.5,
+      "color_jitter": {
+        "brightness": 0.2,
+        "contrast": 0.2,
+        "saturation": 0.2
+      }
+    },
+    "loss": {
+      "type": "multibox_loss",
+      "alpha": 1.0,
+      "neg_pos_ratio": 3.0,
+      "smooth_l1_beta": 1.0
+    },
+    "training": {
+      "phase1": {
+        "epochs": 15,
+        "learning_rate": 0.001,
+        "min_lr": 1e-05,
+        "weight_decay": 0.0005,
+        "lr_scheduler": "cosine",
+        "warmup_epochs": 2
+      },
+      "phase2": {
+        "enabled": true,
+        "epochs": 10,
+        "learning_rate": 0.0001,
+        "min_lr": 1e-06,
+        "weight_decay": 0.0005,
+        "lr_scheduler": "cosine"
+      }
+    },
+    "checkpoint": {
+      "checkpoint_dir": "ml/checkpoints",
+      "save_best_only": true,
+      "metric": "val_map_05",
+      "mode": "max",
+      "save_frequency": 1
+    }
+  }
+}

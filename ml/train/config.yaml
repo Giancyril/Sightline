@@ -1,0 +1,59 @@
+# ml/train/config.yaml
+# Fine-Tuning Configuration for SSD MobileNet V2 on 20-Class Open Images Subset
+
+model:
+  name: "ssd_mobilenet_v2_openimages20"
+  architecture: "SSDMobileNetV2"
+  input_size: [300, 300]
+  num_classes: 21            # 20 target classes + 1 background class (id 0)
+  num_anchors: 2268          # 6 pyramid scales: [19x19x4, 10x10x6, 5x5x6, 3x3x6, 2x2x4, 1x1x4]
+  freeze_backbone: true      # Freeze stem and MobileNetV2 backbone in Phase 1
+
+data:
+  train_manifest: "ml/data/subset/manifest_train.csv"
+  val_manifest: "ml/data/subset/manifest_val.csv"
+  classes_file: "ml/data/classes.json"
+  batch_size: 16
+  num_workers: 2
+  seed: 42
+
+augmentation:
+  horizontal_flip_prob: 0.5
+  random_crop_prob: 0.5
+  color_jitter:
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+
+loss:
+  type: "multibox_loss"
+  alpha: 1.0                 # Localization loss weighting coefficient
+  neg_pos_ratio: 3.0         # Hard negative mining ratio (3 background : 1 foreground)
+  smooth_l1_beta: 1.0        # Huber loss transition threshold
+
+training:
+  # Phase 1: Train heads only (frozen backbone)
+  phase1:
+    epochs: 15
+    learning_rate: 0.001
+    min_lr: 0.00001
+    weight_decay: 0.0005
+    lr_scheduler: "cosine"   # Cosine annealing with warmup
+    warmup_epochs: 2
+
+  # Phase 2: Unfreeze top layers (stage2 and extra blocks) at lower learning rate
+  phase2:
+    enabled: true
+    epochs: 10
+    learning_rate: 0.0001    # 10x lower learning rate
+    min_lr: 0.000001
+    weight_decay: 0.0005
+    lr_scheduler: "cosine"
+
+checkpoint:
+  checkpoint_dir: "ml/checkpoints"
+  save_best_only: true
+  metric: "val_map_05"       # Checkpoint selection criterion: validation mAP@0.5
+  mode: "max"
+  save_frequency: 1          # Save every epoch if improved
+
