@@ -52,15 +52,15 @@ web/dist/
 
 # Large Datasets, Images, and Annotation downloads
 ml/data/raw/
-ml/data/subset/
+ml/data/subset/images/
 ml/data/downloads/
 ml/data/cache/
 *.tfrecord
 *.tfrecords
 *.record
-dataset/
-datasets/
-data/
+/dataset/
+/datasets/
+/data/
 
 # Model Checkpoints, Weights, and Exports (>5MB limit)
 ml/checkpoints/
