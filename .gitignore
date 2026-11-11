@@ -73,8 +73,8 @@ ml/export/*.tflite
 *.pth
 *.pt
 *.onnx
-weights/
-models/
+/weights/
+/models/
 
 # Logs & Experiment Tracking
 logs/

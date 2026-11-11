@@ -1,0 +1,34 @@
+{
+  "model_name": "SSD MobileNet V2 (COCO Pre-trained Baseline)",
+  "val_images": 40,
+  "iou_threshold": 0.5,
+  "mAP_all": 0.1632,
+  "mAP_coco_shared": 0.3264,
+  "mAP_novel_classes": 0.0,
+  "per_class_ap": {
+    "Person": 0.3253,
+    "Laptop": 0.3378,
+    "Chair": 0.3432,
+    "Book": 0.4389,
+    "Backpack": 0.4313,
+    "Cell phone": 0.3341,
+    "Bottle": 0.0,
+    "Clock": 0.3301,
+    "Car": 0.3834,
+    "Dog": 0.3401,
+    "Guitar": 0.0,
+    "Microphone": 0.0,
+    "Helmet": 0.0,
+    "Headphones": 0.0,
+    "Wheelchair": 0.0,
+    "Whiteboard": 0.0,
+    "Flashlight": 0.0,
+    "Calculator": 0.0,
+    "Stapler": 0.0,
+    "Wrench": 0.0
+  },
+  "target_stage5_goals": {
+    "novel_classes_mAP_target": 0.1,
+    "coco_shared_mAP_floor": 0.3064
+  }
+}
