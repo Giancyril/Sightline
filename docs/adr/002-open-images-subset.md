@@ -50,3 +50,4 @@ Used to measure fine-tuning gain on novel target concepts:
 
 ## Group-Of Box Handling
 Boxes flagged as `IsGroupOf=1` in Open Images encompass clusters of items (e.g. a crowd of people or a rack of bottles) rather than discrete single object instances. These boxes distort IoU computations and regression losses during single-instance SSD fine-tuning, so they are excluded from fine-tuning targets and flagged during EDA.
+
