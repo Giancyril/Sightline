@@ -73,8 +73,8 @@ cd web && npm install && npm run dev
 | **2** | Input pipeline — TFRecords, tf.data, augmentations | ✅ Done |
 | **3** | Baseline inference — COCO-pretrained SSD | ✅ Done |
 | **4** | Fine-tuning — detection head on Open Images subset | ✅ Done |
-| **5** | Evaluation — mAP, error analysis, threshold tuning | ⬜ In Progress |
-| **6** | Inference API — FastAPI endpoints, OpenAPI docs | ⬜ |
+| **5** | Evaluation — mAP, error analysis, threshold tuning | ✅ Done |
+| **6** | Inference API — FastAPI endpoints, OpenAPI docs | ⬜ In Progress |
 | **7** | Frontend — React UI with canvas overlay, webcam | ⬜ |
 | **8** | Integration tests & CI — Playwright, contract tests | ⬜ |
 | **9** | Packaging — Docker, model card, README, v1.0.0 | ⬜ |

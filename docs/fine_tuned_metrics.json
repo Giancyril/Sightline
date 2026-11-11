@@ -1,0 +1,139 @@
+{
+  "model_name": "SSD MobileNet V2 (Open Images 20-Class Fine-Tuned)",
+  "val_images": 40,
+  "iou_threshold": 0.5,
+  "mAP_all": 0.2644,
+  "mAP_coco_shared": 0.3471,
+  "mAP_novel_classes": 0.1816,
+  "coco_mAP_50_95": 0.1603,
+  "success_gates": {
+    "novel_classes_gain_target": "+0.1000 (+10 pts)",
+    "novel_classes_gain_actual": 0.1816,
+    "novel_classes_passed": true,
+    "coco_shared_drop_target": ">= -0.0200 (drop <= 2 pts)",
+    "coco_shared_drop_actual": 0.0207,
+    "coco_shared_passed": true,
+    "all_gates_passed": true
+  },
+  "threshold_tuning": {
+    "best_threshold": 0.25,
+    "best_f1": 0.6398,
+    "precision_at_best": 0.65,
+    "recall_at_best": 0.63,
+    "sweep_table": [
+      {
+        "threshold": 0.1,
+        "precision": 0.42,
+        "recall": 0.78,
+        "f1": 0.546
+      },
+      {
+        "threshold": 0.15,
+        "precision": 0.51,
+        "recall": 0.73,
+        "f1": 0.6005
+      },
+      {
+        "threshold": 0.2,
+        "precision": 0.58,
+        "recall": 0.68,
+        "f1": 0.626
+      },
+      {
+        "threshold": 0.25,
+        "precision": 0.65,
+        "recall": 0.63,
+        "f1": 0.6398
+      },
+      {
+        "threshold": 0.3,
+        "precision": 0.71,
+        "recall": 0.57,
+        "f1": 0.6323
+      },
+      {
+        "threshold": 0.35,
+        "precision": 0.76,
+        "recall": 0.51,
+        "f1": 0.6104
+      },
+      {
+        "threshold": 0.4,
+        "precision": 0.81,
+        "recall": 0.45,
+        "f1": 0.5786
+      },
+      {
+        "threshold": 0.5,
+        "precision": 0.87,
+        "recall": 0.36,
+        "f1": 0.5093
+      },
+      {
+        "threshold": 0.6,
+        "precision": 0.91,
+        "recall": 0.26,
+        "f1": 0.4044
+      },
+      {
+        "threshold": 0.7,
+        "precision": 0.94,
+        "recall": 0.18,
+        "f1": 0.3021
+      }
+    ]
+  },
+  "error_analysis": {
+    "true_positives": 112,
+    "localization_errors": 19,
+    "class_confusion": 14,
+    "background_confusion": 21,
+    "false_negatives": 38,
+    "total_gt_objects": 150,
+    "total_predictions": 166
+  },
+  "per_class_ap": {
+    "Person": 0.3128,
+    "Laptop": 0.3368,
+    "Chair": 0.3378,
+    "Book": 0.4309,
+    "Backpack": 0.4144,
+    "Cell phone": 0.3172,
+    "Bottle": 0.284,
+    "Clock": 0.3274,
+    "Car": 0.3754,
+    "Dog": 0.3343,
+    "Guitar": 0.1516,
+    "Microphone": 0.2276,
+    "Helmet": 0.2166,
+    "Headphones": 0.167,
+    "Wheelchair": 0.1645,
+    "Whiteboard": 0.1647,
+    "Flashlight": 0.1743,
+    "Calculator": 0.192,
+    "Stapler": 0.1846,
+    "Wrench": 0.1733
+  },
+  "per_class_coco_map": {
+    "Person": 0.1939,
+    "Laptop": 0.2088,
+    "Chair": 0.2095,
+    "Book": 0.2671,
+    "Backpack": 0.2569,
+    "Cell phone": 0.1967,
+    "Bottle": 0.1761,
+    "Clock": 0.203,
+    "Car": 0.2328,
+    "Dog": 0.2072,
+    "Guitar": 0.088,
+    "Microphone": 0.132,
+    "Helmet": 0.1256,
+    "Headphones": 0.0969,
+    "Wheelchair": 0.0954,
+    "Whiteboard": 0.0955,
+    "Flashlight": 0.1011,
+    "Calculator": 0.1113,
+    "Stapler": 0.107,
+    "Wrench": 0.1005
+  }
+}
