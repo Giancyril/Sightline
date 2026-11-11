@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "object-detection-system"
+version = "0.1.0"
+description = "End-to-end Object Detection System: Fine-tuned SSD on Open Images subset with FastAPI backend and React frontend."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Project Lead", email = "lead@example.com" }
+]
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "pydantic>=2.6.0",
+    "python-multipart>=0.0.9",
+    "numpy>=1.26.0",
+    "pillow>=10.2.0",
+    "opencv-python-headless>=4.9.0.80",
+    "requests>=2.31.0",
+    "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+ml = [
+    "tensorflow>=2.15.0",
+    "pycocotools>=2.0.7",
+    "scikit-learn>=1.4.0",
+    "matplotlib>=3.8.0",
+    "tqdm>=4.66.0",
+    "pandas>=2.2.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "ruff>=0.3.0",
+    "black>=24.2.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "venv",
+    ".venv",
+    "node_modules",
+    "web",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+ignore = [
+    "E501",  # line length handled by black/formatter
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.pytest_cache
+  | \.ruff_cache
+  | venv
+  | \.venv
+  | node_modules
+  | web
+)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "venv",
+    "node_modules",
+    "web",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = [
+    "api/tests",
+    "ml/tests",
+]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+markers = [
+    "stage0: tests for Stage 0 (bootstrap)",
+    "stage1: tests for Stage 1 (data acquisition)",
+    "stage2: tests for Stage 2 (input pipeline)",
+    "stage3: tests for Stage 3 (baseline inference)",
+    "stage4: tests for Stage 4 (fine-tuning)",
+    "stage5: tests for Stage 5 (evaluation)",
+    "stage6: tests for Stage 6 (inference API)",
+    "stage7: tests for Stage 7 (frontend)",
+    "stage8: tests for Stage 8 (integration tests and CI)",
+    "stage9: tests for Stage 9 (packaging and documentation)",
+]
+
