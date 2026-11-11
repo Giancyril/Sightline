@@ -4,3 +4,4 @@ To generate a real screenshot, start the development server:
   cd web && npm run dev
 
 Then open http://localhost:5173, upload a test image, and save a screenshot to this path.
+
