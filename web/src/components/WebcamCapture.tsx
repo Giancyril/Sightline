@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, RefreshCw } from "lucide-react";
+import { Camera, CameraOff } from "lucide-react";
+import { Button } from "./ui/Button";
 
 interface WebcamCaptureProps {
   onCapture: (blob: Blob) => void;
   isProcessing: boolean;
 }
 
-export const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isProcessing }) => {
+export const WebcamCapture: React.FC<WebcamCaptureProps> = ({
+  onCapture,
+  isProcessing,
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [streamActive, setStreamActive] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -20,7 +24,7 @@ export const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isProce
       });
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        await videoRef.current.play();
         setStreamActive(true);
       }
     } catch (err) {
@@ -68,8 +72,8 @@ export const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isProce
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full">
-      <div className="relative w-full max-w-lg aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+    <div className="flex flex-col items-center justify-center gap-4 w-full max-w-lg mx-auto">
+      <div className="relative w-full aspect-video bg-canvas rounded-panel overflow-hidden border border-border-subtle flex items-center justify-center">
         <video
           ref={videoRef}
           playsInline
@@ -78,56 +82,57 @@ export const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isProce
         />
         {!streamActive && (
           <div className="text-center p-6">
-            <Camera className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">Webcam is currently inactive</p>
+            <Camera className="w-10 h-10 text-text-tertiary mx-auto mb-2 opacity-60" />
+            <p className="text-xs text-text-secondary">Camera stream inactive</p>
           </div>
         )}
 
         {isProcessing && (
-          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center">
-            <div className="flex items-center gap-2 text-sky-400 font-medium">
-              <RefreshCw className="w-5 h-5 animate-spin" />
-              <span>Running Inference...</span>
+          <div className="absolute inset-0 bg-canvas/80 backdrop-blur-sm flex items-center justify-center">
+            <div className="flex items-center gap-2 text-xs font-medium text-brand">
+              <span className="w-2 h-2 rounded-full bg-brand animate-ping" />
+              <span>Running inference…</span>
             </div>
           </div>
         )}
       </div>
 
-      {errorMsg && <p className="text-sm text-red-400">{errorMsg}</p>}
+      {errorMsg && (
+        <p className="text-xs text-status-danger font-medium">{errorMsg}</p>
+      )}
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {!streamActive ? (
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={startCamera}
-            className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-medium transition"
+            leftIcon={<Camera className="w-3.5 h-3.5" />}
           >
-            <Camera className="w-4 h-4" />
-            <span>Enable Webcam</span>
-          </button>
+            Start camera
+          </Button>
         ) : (
           <>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={captureFrame}
-              disabled={isProcessing}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-lg shadow-emerald-950 transition"
+              isLoading={isProcessing}
+              leftIcon={<Camera className="w-3.5 h-3.5" />}
             >
-              <Camera className="w-4 h-4" />
-              <span>Capture & Detect</span>
-            </button>
-            <button
-              type="button"
+              Capture frame
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={stopCamera}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition"
+              leftIcon={<CameraOff className="w-3.5 h-3.5" />}
             >
-              <CameraOff className="w-4 h-4" />
-              <span>Turn Off</span>
-            </button>
+              Stop
+            </Button>
           </>
         )}
       </div>
     </div>
   );
 };
-
