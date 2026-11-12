@@ -145,3 +145,4 @@ Base unit: **4px**
   * Card standard: `none` (clean border separation)
   * Elevated dropdown/overlay: `0 4px 12px rgba(0, 0, 0, 0.08)` (Light) / `0 4px 12px rgba(0, 0, 0, 0.40)` (Dark)
 * **Glassmorphism:** Strictly prohibited. No `backdrop-blur-md` on content containers; solid or 90% opaque neutral backgrounds only.
+

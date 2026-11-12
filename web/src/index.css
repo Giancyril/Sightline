@@ -2,32 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
 :root {
-  color-scheme: dark light;
+  --surface-canvas: #ffffff;
+  --surface-subtle: #fafafa;
+  --surface-card: #ffffff;
+  --surface-elevated: #f4f4f5;
+  --surface-overlay: rgba(255, 255, 255, 0.85);
+
+  --border-subtle: #e4e4e7;
+  --border-muted: #d4d4d8;
+  --border-strong: #a1a1aa;
+
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-tertiary: #71717a;
+  --text-inverse: #ffffff;
+
+  --brand-primary: #0070f3;
+  --brand-hover: #005bea;
+  --brand-subtle: rgba(0, 112, 243, 0.08);
+
+  --focus-ring: rgba(0, 112, 243, 0.35);
+
+  --status-success: #10b981;
+  --status-success-subtle: rgba(16, 185, 129, 0.12);
+  --status-danger: #ef4444;
+  --status-danger-subtle: rgba(239, 68, 68, 0.12);
+  --status-warning: #f59e0b;
+  --status-warning-subtle: rgba(245, 158, 11, 0.12);
+
+  --radius-control: 6px;
+  --radius-panel: 10px;
+  --radius-chip: 4px;
+}
+
+.dark {
+  --surface-canvas: #0a0a0a;
+  --surface-subtle: #121214;
+  --surface-card: #18181b;
+  --surface-elevated: #27272a;
+  --surface-overlay: rgba(18, 18, 20, 0.85);
+
+  --border-subtle: #27272a;
+  --border-muted: #3f3f46;
+  --border-strong: #52525b;
+
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-inverse: #09090b;
+
+  --brand-primary: #0070f3;
+  --brand-hover: #3291ff;
+  --brand-subtle: rgba(0, 112, 243, 0.15);
+
+  --focus-ring: rgba(0, 112, 243, 0.50);
+
+  --status-success: #10b981;
+  --status-success-subtle: rgba(16, 185, 129, 0.16);
+  --status-danger: #ef4444;
+  --status-danger-subtle: rgba(239, 68, 68, 0.16);
+  --status-warning: #f59e0b;
+  --status-warning-subtle: rgba(245, 158, 11, 0.16);
+}
+
+html {
+  scrollbar-gutter: stable;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #090d16;
-  color: #f1f5f9;
+  background-color: var(--surface-canvas);
+  color: var(--text-primary);
   min-height: 100vh;
 }
 
-/* Custom scrollbar */
+/* Tabular figures for monospace and metrics */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Universal accessible focus outline */
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* Minimal scrollbar adhering to tokens */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--surface-subtle);
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--border-muted);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--border-strong);
 }

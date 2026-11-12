@@ -6,6 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VisionSSD — Real-Time Object Detection System</title>
     <meta name="description" content="Production-ready real-time object detection interface with SSD MobileNet V2 fine-tuned on Open Images." />
+    <script>
+      (function() {
+        try {
+          const urlTheme = new URLSearchParams(window.location.search).get('theme');
+          const stored = urlTheme || localStorage.getItem('vision-ssd-theme');
+          const isDark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches) || (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark && stored !== 'light') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

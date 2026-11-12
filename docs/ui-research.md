@@ -50,3 +50,4 @@ When user interfaces deploy neon cyan fills, glowing gradient app icons, and can
 1. **True Dual-Theme Design:** Both Light and Dark modes are designed as first-class citizens. No CSS `invert()`.
 2. **Component Color Tokenization:** Not a single hardcoded hex value (`#090d16`, `#0284c7`, `slate-900`) will exist inside view components; all colors will reference semantic CSS variables (`var(--surface-canvas)`, `var(--border-subtle)`).
 3. **No Internal Jargon:** Replace phrases like *"Stage 5 Exit Criteria"*, *"Stage 3 Baseline"*, and internal network ports (`:8000`, `:5173`) with customer-facing terminology (*"Performance Benchmarks"*, *"COCO MobileNet Baseline"*, *"Live Services"*).
+
