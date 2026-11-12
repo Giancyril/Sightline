@@ -93,3 +93,4 @@ Complete redesign and modernization of the Sightline Object Detection web interf
 - Enhanced accessibility with `role="region"`, `role="img"`, ARIA labels on canvas, keyboard navigation (`tabIndex={0}`, Enter/Space) for history cards, and an `aria-live="polite"` region for dynamic detection count announcements.
 - Verified production build bundle size: main bundle 160.43 kB gzipped (target: < 250 kB gzipped).
 - Added comprehensive Playwright end-to-end tests for main detection flow and 4-page visual snapshot matrix across light and dark themes.
+
