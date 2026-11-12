@@ -10,6 +10,11 @@ import {
   Search,
   Palette,
   ArrowRight,
+  Upload,
+  Tag,
+  HelpCircle,
+  XCircle,
+  Download,
 } from "lucide-react";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
@@ -22,8 +27,9 @@ interface CommandItem {
   label: string;
   description?: string;
   icon: React.ReactNode;
-  group: "Navigate" | "Theme";
+  group: "Navigate" | "Actions" | "Theme";
   keywords?: string[];
+  shortcut?: string;
   action: () => void;
 }
 
@@ -49,6 +55,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   const allItems: CommandItem[] = useMemo(
     () => [
+      // Navigation
       {
         id: "nav-detect",
         label: "Detect",
@@ -109,6 +116,83 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           onOpenChange(false);
         },
       },
+
+      // Actions
+      {
+        id: "act-upload",
+        label: "Upload new image",
+        description: "Browse filesystem for an image",
+        icon: <Upload className="w-4 h-4" />,
+        group: "Actions",
+        shortcut: "U",
+        keywords: ["browse", "upload", "file", "open", "image"],
+        action: () => {
+          onNavigate("detect");
+          onOpenChange(false);
+          setTimeout(() => {
+            window.dispatchEvent(new KeyboardEvent("keydown", { key: "u" }));
+          }, 100);
+        },
+      },
+      {
+        id: "act-toggle-labels",
+        label: "Toggle label chips",
+        description: "Show or hide labels on bounding boxes",
+        icon: <Tag className="w-4 h-4" />,
+        group: "Actions",
+        shortcut: "Space",
+        keywords: ["labels", "tags", "scores", "hide", "show"],
+        action: () => {
+          onNavigate("detect");
+          onOpenChange(false);
+          setTimeout(() => {
+            window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space" }));
+          }, 100);
+        },
+      },
+      {
+        id: "act-clear-selection",
+        label: "Clear active selection",
+        description: "Unpin and deselect active detection",
+        icon: <XCircle className="w-4 h-4" />,
+        group: "Actions",
+        shortcut: "Esc",
+        keywords: ["unpin", "clear", "deselect"],
+        action: () => {
+          onOpenChange(false);
+          window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        },
+      },
+      {
+        id: "act-shortcuts",
+        label: "Keyboard shortcuts help",
+        description: "View all workspace keyboard hotkeys",
+        icon: <HelpCircle className="w-4 h-4" />,
+        group: "Actions",
+        shortcut: "?",
+        keywords: ["shortcuts", "hotkeys", "help", "keys"],
+        action: () => {
+          onNavigate("detect");
+          onOpenChange(false);
+          setTimeout(() => {
+            window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" }));
+          }, 100);
+        },
+      },
+      {
+        id: "act-export",
+        label: "Export detections",
+        description: "Download JSON, CSV, or annotated PNG",
+        icon: <Download className="w-4 h-4" />,
+        group: "Actions",
+        keywords: ["export", "download", "csv", "json", "png"],
+        action: () => {
+          onNavigate("detect");
+          onOpenChange(false);
+        },
+      },
+
+      // Theme
       {
         id: "theme-light",
         label: "Light theme",
@@ -174,7 +258,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   const flatFiltered = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
-  // Handle open state change to clear query
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setQuery("");
@@ -284,6 +367,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                           </span>
                         )}
                       </span>
+                      {item.shortcut && (
+                        <kbd className="font-mono text-[10px] px-1.5 py-0.5 rounded-chip bg-elevated border border-border-subtle text-text-tertiary mr-1">
+                          {item.shortcut}
+                        </kbd>
+                      )}
                       {isSelected && (
                         <ArrowRight className="w-3.5 h-3.5 shrink-0 opacity-50" />
                       )}

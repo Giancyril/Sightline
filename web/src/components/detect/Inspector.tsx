@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Sliders,
   AlertTriangle,
@@ -8,12 +8,18 @@ import {
   Clock,
   Layers,
   Box,
+  X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Pin,
 } from "lucide-react";
 import type { DetectionItem } from "../../types";
 import { colorForClass } from "../../lib/colors";
 import { Slider } from "../ui/Slider";
 import { Button } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
+import { Badge } from "../ui/Badge";
 import { cn } from "../../lib/utils";
 
 interface InspectorProps {
@@ -26,12 +32,16 @@ interface InspectorProps {
   onNmsChange: (val: number) => void;
   selectedIndex: number | null;
   onSelectIndex: (idx: number | null) => void;
+  hoveredIndex: number | null;
+  onHoverIndex: (idx: number | null) => void;
   isLoading: boolean;
   errorMsg: string | null;
   onRetry: () => void;
   isApiOffline?: boolean;
   className?: string;
 }
+
+type SortField = "score" | "class" | "area";
 
 export const Inspector: React.FC<InspectorProps> = ({
   detections,
@@ -42,16 +52,78 @@ export const Inspector: React.FC<InspectorProps> = ({
   onNmsChange,
   selectedIndex,
   onSelectIndex,
+  hoveredIndex,
+  onHoverIndex,
   isLoading,
   errorMsg,
   onRetry,
   isApiOffline = false,
   className,
 }) => {
-  // Unique classes count
-  const uniqueClassesCount = useMemo(() => {
-    return new Set(detections.map((d) => d.class_id)).size;
+  // Class filter state
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string | null>(null);
+
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>("score");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Unique classes count & summary counts
+  const classCounts = useMemo(() => {
+    const map = new Map<string, { count: number; id: number; hex: string }>();
+    detections.forEach((d) => {
+      const existing = map.get(d.class_name);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        const c = colorForClass(d.class_id);
+        map.set(d.class_name, { count: 1, id: d.class_id, hex: c.hex });
+      }
+    });
+    return Array.from(map.entries()).map(([name, data]) => ({
+      name,
+      count: data.count,
+      id: data.id,
+      hex: data.hex,
+    }));
   }, [detections]);
+
+  // Filter & Sort pipeline
+  const processedDetections = useMemo(() => {
+    let list = detections.map((det, origIdx) => ({ det, origIdx }));
+
+    // 1. Class chip filter
+    if (selectedClassFilter) {
+      list = list.filter((item) => item.det.class_name === selectedClassFilter);
+    }
+
+    // 2. Sorting
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "score") {
+        cmp = a.det.confidence - b.det.confidence;
+      } else if (sortField === "class") {
+        cmp = a.det.class_name.localeCompare(b.det.class_name);
+      } else if (sortField === "area") {
+        const areaA = a.det.box_pixel.width * a.det.box_pixel.height;
+        const areaB = b.det.box_pixel.width * b.det.box_pixel.height;
+        cmp = areaA - areaB;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+    return list;
+  }, [detections, selectedClassFilter, sortField, sortDir]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  const pinnedDetection = selectedIndex !== null ? detections[selectedIndex] : null;
 
   // Loading skeleton state
   if (isLoading) {
@@ -66,23 +138,16 @@ export const Inspector: React.FC<InspectorProps> = ({
           <Skeleton className="h-4 w-28" />
           <Skeleton className="h-4 w-14" />
         </div>
-
-        {/* Summary skeleton */}
         <div className="grid grid-cols-3 gap-2 py-2 border-b border-border-subtle">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
-
-        {/* Sliders skeleton */}
         <div className="flex flex-col gap-3 py-1">
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
         </div>
-
-        {/* Table skeleton */}
         <div className="flex flex-col gap-2 pt-2 flex-1">
-          <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-full" />
@@ -185,7 +250,7 @@ export const Inspector: React.FC<InspectorProps> = ({
               <Layers className="w-3 h-3 opacity-60" /> Classes
             </span>
             <span className="text-sm font-semibold font-mono text-text-primary tabular-nums mt-0.5">
-              {uniqueClassesCount}
+              {classCounts.length}
             </span>
           </div>
 
@@ -230,56 +295,225 @@ export const Inspector: React.FC<InspectorProps> = ({
         />
       </div>
 
-      {/* 3. Detections Table or Empty State */}
-      <div className="flex-1 overflow-y-auto p-2">
-        {detections.length === 0 ? (
+      {/* 3. Class Filter Chips */}
+      {classCounts.length > 0 && (
+        <div className="px-3.5 py-2.5 border-b border-border-subtle flex items-center gap-1.5 overflow-x-auto text-xs">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary mr-1 shrink-0">
+            Filter:
+          </span>
+          {classCounts.map((c) => {
+            const isSelected = selectedClassFilter === c.name;
+            return (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() =>
+                  setSelectedClassFilter(isSelected ? null : c.name)
+                }
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-chip text-[11px] font-medium border transition-colors shrink-0",
+                  isSelected
+                    ? "bg-brand text-white border-brand shadow-sm"
+                    : "bg-elevated border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-muted"
+                )}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: c.hex }}
+                />
+                <span>{c.name}</span>
+                <span className="font-mono text-[10px] opacity-70">
+                  {c.count}
+                </span>
+              </button>
+            );
+          })}
+
+          {selectedClassFilter && (
+            <button
+              type="button"
+              onClick={() => setSelectedClassFilter(null)}
+              className="text-[10px] text-text-tertiary hover:text-status-danger underline ml-1 shrink-0"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 4. Pinned Detection Detail Card */}
+      {pinnedDetection && (
+        <div className="p-3 border-b border-border-subtle bg-elevated/40 text-xs flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Pin className="w-3.5 h-3.5 text-brand" />
+              <span className="font-semibold text-text-primary">
+                {pinnedDetection.class_name}
+              </span>
+              <Badge variant="neutral" mono>
+                #{(pinnedDetection.confidence * 100).toFixed(1)}%
+              </Badge>
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectIndex(null)}
+              className="p-1 rounded-control text-text-tertiary hover:text-text-primary hover:bg-elevated"
+              aria-label="Unpin detection"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-card border border-border-subtle p-2 rounded-control">
+            <div>
+              <span className="text-text-tertiary block text-[10px]">Box Origin</span>
+              <span>
+                [{pinnedDetection.box_pixel.xmin}, {pinnedDetection.box_pixel.ymin}]
+              </span>
+            </div>
+            <div>
+              <span className="text-text-tertiary block text-[10px]">Size</span>
+              <span>
+                {pinnedDetection.box_pixel.width}×{pinnedDetection.box_pixel.height} px
+              </span>
+            </div>
+            <div>
+              <span className="text-text-tertiary block text-[10px]">Total Area</span>
+              <span>
+                {(
+                  pinnedDetection.box_pixel.width * pinnedDetection.box_pixel.height
+                ).toLocaleString()}{" "}
+                px²
+              </span>
+            </div>
+            <div>
+              <span className="text-text-tertiary block text-[10px]">Class ID</span>
+              <span>ID #{pinnedDetection.class_id}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Detections Table Header (Sortable) */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-subtle text-[10px] font-semibold uppercase tracking-wider text-text-tertiary select-none">
+        <button
+          type="button"
+          onClick={() => handleSort("class")}
+          className="flex items-center gap-1 hover:text-text-primary focus-visible:outline-none"
+        >
+          <span>Class</span>
+          {sortField === "class" ? (
+            sortDir === "asc" ? (
+              <ArrowUp className="w-3 h-3" />
+            ) : (
+              <ArrowDown className="w-3 h-3" />
+            )
+          ) : (
+            <ArrowUpDown className="w-3 h-3 opacity-40" />
+          )}
+        </button>
+
+        <div className="flex items-center gap-6">
+          <button
+            type="button"
+            onClick={() => handleSort("score")}
+            className="flex items-center gap-1 hover:text-text-primary focus-visible:outline-none"
+          >
+            <span>Score</span>
+            {sortField === "score" ? (
+              sortDir === "asc" ? (
+                <ArrowUp className="w-3 h-3" />
+              ) : (
+                <ArrowDown className="w-3 h-3" />
+              )
+            ) : (
+              <ArrowUpDown className="w-3 h-3 opacity-40" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSort("area")}
+            className="flex items-center gap-1 hover:text-text-primary focus-visible:outline-none w-20 justify-end"
+          >
+            <span>Area</span>
+            {sortField === "area" ? (
+              sortDir === "asc" ? (
+                <ArrowUp className="w-3 h-3" />
+              ) : (
+                <ArrowDown className="w-3 h-3" />
+              )
+            ) : (
+              <ArrowUpDown className="w-3 h-3 opacity-40" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* 6. Detections Table or Empty State (Exposed as accessible list) */}
+      <div
+        className="flex-1 overflow-y-auto p-2"
+        role="region"
+        aria-label="Detected objects list"
+      >
+        {processedDetections.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
             <div className="flex h-9 w-9 items-center justify-center rounded-control bg-elevated border border-border-subtle text-text-tertiary mb-2">
               <Inbox className="w-4 h-4" />
             </div>
             <p className="text-xs font-semibold text-text-primary mb-1">
-              No objects detected
+              No objects match filters
             </p>
             <p className="text-[11px] text-text-tertiary max-w-[220px] mb-3 leading-relaxed">
-              No boxes met the {(confThreshold * 100).toFixed(0)}% confidence threshold.
+              {selectedClassFilter
+                ? `No ${selectedClassFilter} detected above ${(confThreshold * 100).toFixed(0)}%.`
+                : `No boxes met the ${(confThreshold * 100).toFixed(0)}% threshold.`}
             </p>
-            {confThreshold > 0.15 && (
+            {selectedClassFilter ? (
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => onConfChange(0.15)}
-                leftIcon={<Sparkles className="w-3.5 h-3.5 text-brand" />}
+                onClick={() => setSelectedClassFilter(null)}
               >
-                Lower to 15%
+                Reset class filter
               </Button>
+            ) : (
+              confThreshold > 0.15 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onConfChange(0.15)}
+                  leftIcon={<Sparkles className="w-3.5 h-3.5 text-brand" />}
+                >
+                  Lower to 15%
+                </Button>
+              )
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-1" role="table" aria-label="Detected objects">
-            {/* Column Headers */}
-            <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary select-none">
-              <span>Class</span>
-              <div className="flex items-center gap-6">
-                <span>Score</span>
-                <span className="w-20 text-right">Box (px)</span>
-              </div>
-            </div>
-
-            {/* Rows */}
-            {detections.map((det, idx) => {
-              const isSelected = selectedIndex === idx;
+          <div className="flex flex-col gap-1" role="list">
+            {processedDetections.map(({ det, origIdx }) => {
+              const isSelected = selectedIndex === origIdx;
+              const isHovered = hoveredIndex === origIdx;
               const classCol = colorForClass(det.class_id);
               const scorePct = Math.round(det.confidence * 100);
+              const areaPx = det.box_pixel.width * det.box_pixel.height;
 
               return (
                 <button
-                  key={idx}
+                  key={origIdx}
                   type="button"
-                  onClick={() => onSelectIndex(isSelected ? null : idx)}
+                  role="listitem"
+                  aria-label={`${det.class_name}, confidence ${scorePct}%, box size ${det.box_pixel.width} by ${det.box_pixel.height} pixels, area ${areaPx} pixels squared`}
+                  onClick={() => onSelectIndex(isSelected ? null : origIdx)}
+                  onMouseEnter={() => onHoverIndex(origIdx)}
+                  onMouseLeave={() => onHoverIndex(null)}
                   className={cn(
                     "flex items-center justify-between w-full px-2.5 py-1.5 rounded-control text-left transition-colors border select-none",
                     isSelected
-                      ? "bg-elevated border-brand shadow-sm"
+                      ? "bg-elevated border-brand shadow-sm ring-1 ring-brand"
+                      : isHovered
+                      ? "bg-subtle border-border-muted"
                       : "bg-card border-transparent hover:bg-subtle hover:border-border-subtle"
                   )}
                 >
@@ -294,9 +528,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                     </span>
                   </div>
 
-                  {/* Right: Score Bar + Coordinates */}
+                  {/* Right: Score Bar + Area Coordinates */}
                   <div className="flex items-center gap-4 shrink-0">
-                    {/* Score Bar + Text */}
                     <div className="flex items-center gap-1.5">
                       <div className="w-12 h-1.5 rounded-full bg-elevated overflow-hidden border border-border-subtle">
                         <div
@@ -312,7 +545,6 @@ export const Inspector: React.FC<InspectorProps> = ({
                       </span>
                     </div>
 
-                    {/* Box Dimensions */}
                     <span className="font-mono text-[10px] text-text-tertiary tabular-nums w-20 text-right truncate">
                       {det.box_pixel.width}×{det.box_pixel.height}
                     </span>
