@@ -85,5 +85,7 @@ export interface HistoryRecord {
   timestamp: string;
   previewUrl: string;
   result: DetectionResponse;
+  createdAt?: number;
+  thumbnail?: string;
 }
 

@@ -11,6 +11,13 @@ import { CommandPalette, type NavTab } from "./components/shell/CommandPalette";
 import { MobileNav } from "./components/shell/MobileNav";
 import { PageContainer, PageHeader } from "./components/shell/PageContainer";
 import { useApiHealth } from "./hooks/useApiHealth";
+import {
+  getStoredHistory,
+  saveHistoryItem,
+  deleteHistoryItem,
+  clearAllHistory,
+  createLightweightThumbnail,
+} from "./lib/historyStorage";
 import { cn } from "./lib/utils";
 import type { HistoryRecord } from "./types";
 
@@ -20,6 +27,10 @@ const isMac =
 export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     if (typeof window !== "undefined") {
+      const urlTab = new URLSearchParams(window.location.search).get("tab") as NavTab | null;
+      if (urlTab && ["detect", "history", "model", "api", "dev"].includes(urlTab)) {
+        return urlTab;
+      }
       if (
         window.location.pathname === "/dev/components" ||
         window.location.pathname.startsWith("/dev") ||
@@ -27,13 +38,30 @@ export function App() {
       ) {
         return "dev";
       }
+      if (window.location.hash === "#/history" || window.location.pathname === "/history") {
+        return "history";
+      }
     }
     return "detect";
   });
 
   const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [activeDetectionRecord, setActiveDetectionRecord] = useState<HistoryRecord | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const apiHealth = useApiHealth();
+
+  // Load persistent history from IndexedDB on startup
+  useEffect(() => {
+    let mounted = true;
+    void getStoredHistory().then((stored) => {
+      if (mounted && stored.length > 0) {
+        setHistory(stored);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -66,17 +94,46 @@ export function App() {
     }
   };
 
-  const handleSaveHistory = (record: HistoryRecord) => {
-    setHistory((prev) => [record, ...prev].slice(0, 30));
+  const handleSaveHistory = async (record: HistoryRecord) => {
+    const createdAt = record.createdAt || Date.now();
+    let thumbnail = record.thumbnail || record.previewUrl;
+
+    try {
+      thumbnail = await createLightweightThumbnail(record.previewUrl, record.result);
+    } catch {
+      // Fallback to original previewUrl if canvas render fails
+    }
+
+    const itemToStore = {
+      ...record,
+      createdAt,
+      thumbnail,
+    };
+
+    setHistory((prev) => [itemToStore, ...prev.filter((i) => i.id !== itemToStore.id)].slice(0, 200));
+    void saveHistoryItem({
+      id: record.id,
+      createdAt,
+      timestamp: record.timestamp,
+      thumbnail,
+      previewUrl: record.previewUrl,
+      result: record.result,
+    });
   };
 
   const handleSelectHistoryRecord = (record: HistoryRecord) => {
+    setActiveDetectionRecord(record);
     setActiveTab("detect");
-    console.log("Selected record:", record.id);
+  };
+
+  const handleDeleteRecord = (id: string) => {
+    setHistory((prev) => prev.filter((i) => i.id !== id));
+    void deleteHistoryItem(id);
   };
 
   const handleClearHistory = () => {
     setHistory([]);
+    void clearAllHistory();
   };
 
   return (
@@ -226,19 +283,25 @@ export function App() {
               title="Detect"
               description="Real-time object detection with MobileNet V2 SSD across 20 object classes."
             />
-            <DetectView onSaveHistory={handleSaveHistory} />
+            <DetectView
+              key={activeDetectionRecord?.id || "fresh"}
+              onSaveHistory={handleSaveHistory}
+              initialRecord={activeDetectionRecord}
+            />
           </PageContainer>
         )}
         {activeTab === "history" && (
           <PageContainer>
             <PageHeader
               title="History"
-              description="Review past detection results, confidence scores, and timings from this session."
+              description="Review past detection results, confidence scores, and timings from this browser."
             />
             <HistoryView
               history={history}
               onSelectRecord={handleSelectHistoryRecord}
               onClearHistory={handleClearHistory}
+              onDeleteRecord={handleDeleteRecord}
+              onNavigateToDetect={() => setActiveTab("detect")}
             />
           </PageContainer>
         )}

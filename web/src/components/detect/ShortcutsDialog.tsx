@@ -74,3 +74,4 @@ export const ShortcutsDialog: React.FC<ShortcutsDialogProps> = ({
     </Dialog>
   );
 };
+

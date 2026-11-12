@@ -2,7 +2,6 @@ import React, {
   useState,
   useRef,
   useMemo,
-  useCallback,
   useEffect,
   Suspense,
   lazy,
@@ -23,11 +22,17 @@ const WebcamWorkspace = lazy(() => import("../components/detect/WebcamWorkspace"
 
 interface DetectViewProps {
   onSaveHistory: (record: HistoryRecord) => void;
+  initialRecord?: HistoryRecord | null;
 }
 
-export const DetectView: React.FC<DetectViewProps> = ({ onSaveHistory }) => {
+export const DetectView: React.FC<DetectViewProps> = ({
+  onSaveHistory,
+  initialRecord,
+}) => {
   const [mode, setMode] = useState<"upload" | "webcam">("upload");
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(
+    () => initialRecord?.thumbnail || initialRecord?.previewUrl || null
+  );
   const [currentBlob, setCurrentBlob] = useState<Blob | null>(null);
 
   // Upload progress & inference state
@@ -37,13 +42,19 @@ export const DetectView: React.FC<DetectViewProps> = ({ onSaveHistory }) => {
   const [isApiOffline, setIsApiOffline] = useState<boolean>(false);
 
   // Results & Interaction state
-  const [rawResult, setRawResult] = useState<DetectionResponse | null>(null);
+  const [rawResult, setRawResult] = useState<DetectionResponse | null>(
+    () => initialRecord?.result || null
+  );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   // Sliders
-  const [confThreshold, setConfThreshold] = useState<number>(0.25);
-  const [nmsThreshold, setNmsThreshold] = useState<number>(0.45);
+  const [confThreshold, setConfThreshold] = useState<number>(
+    () => initialRecord?.result?.thresholds_applied?.confidence_threshold || 0.25
+  );
+  const [nmsThreshold, setNmsThreshold] = useState<number>(
+    () => initialRecord?.result?.thresholds_applied?.nms_iou_threshold || 0.45
+  );
 
   // Shortcuts Dialog state
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
@@ -55,79 +66,66 @@ export const DetectView: React.FC<DetectViewProps> = ({ onSaveHistory }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Run backend detection
-  const runDetection = useCallback(
-    async (blob: Blob, nms: number = nmsThreshold) => {
-      try {
-        setIsDetecting(true);
-        setErrorMsg(null);
-        setIsApiOffline(false);
-        setSelectedIndex(null);
-        setHoveredIndex(null);
+  const runDetection = async (blob: Blob, nms: number = nmsThreshold) => {
+    try {
+      setIsDetecting(true);
+      setErrorMsg(null);
+      setIsApiOffline(false);
+      setSelectedIndex(null);
+      setHoveredIndex(null);
 
-        // Fetch at baseline 0.05 to allow zero-latency client-side re-filtering
-        const res = await detectImage(blob, 0.05, nms);
-        setRawResult(res);
+      // Fetch at baseline 0.05 to allow zero-latency client-side re-filtering
+      const res = await detectImage(blob, 0.05, nms);
+      setRawResult(res);
 
-        // Update accessible announcement
-        const count = res.detections.filter((d) => d.confidence >= confThreshold).length;
-        setAnnouncement(
-          `Detection complete: ${count} objects detected in ${res.inference_time_ms.toFixed(1)} milliseconds.`
-        );
+      const count = res.detections.filter((d) => d.confidence >= confThreshold).length;
+      setAnnouncement(
+        `Detection complete: ${count} objects detected in ${res.inference_time_ms.toFixed(1)} milliseconds.`
+      );
 
-        onSaveHistory({
-          id: Math.random().toString(36).substring(2, 9),
-          timestamp: new Date().toLocaleTimeString(),
-          previewUrl: URL.createObjectURL(blob),
-          result: res,
-        });
-      } catch (err) {
-        const message = (err as Error).message;
-        if (
-          message.includes("Failed to fetch") ||
-          message.includes("NetworkError") ||
-          message.includes("status 502") ||
-          message.includes("status 503")
-        ) {
-          setIsApiOffline(true);
-          setAnnouncement("API inference server is offline or unreachable.");
-        } else {
-          setErrorMsg(message);
-          setAnnouncement(`Error during inference: ${message}`);
-        }
-      } finally {
-        setIsDetecting(false);
+      onSaveHistory({
+        id: Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toLocaleTimeString(),
+        previewUrl: URL.createObjectURL(blob),
+        result: res,
+      });
+    } catch (err) {
+      const message = (err as Error).message;
+      if (
+        message.includes("Failed to fetch") ||
+        message.includes("NetworkError") ||
+        message.includes("status 502") ||
+        message.includes("status 503")
+      ) {
+        setIsApiOffline(true);
+        setAnnouncement("API inference server is offline or unreachable.");
+      } else {
+        setErrorMsg(message);
+        setAnnouncement(`Error during inference: ${message}`);
       }
-    },
-    [nmsThreshold, confThreshold, onSaveHistory]
-  );
+    } finally {
+      setIsDetecting(false);
+    }
+  };
 
   // Determinate upload flow
-  const handleProcessFile = useCallback(
-    (file: Blob | File) => {
-      setCurrentBlob(file);
-      setUploadProgress(0);
+  const handleProcessFile = (file: Blob | File) => {
+    setCurrentBlob(file);
+    setUploadProgress(0);
 
-      const previewUrl = URL.createObjectURL(file);
-      setImagePreview(previewUrl);
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
 
-      const t1 = setTimeout(() => setUploadProgress(40), 40);
-      const t2 = setTimeout(() => setUploadProgress(85), 100);
-      const t3 = setTimeout(() => {
-        setUploadProgress(100);
-        setTimeout(() => {
-          setUploadProgress(null);
-          void runDetection(file);
-        }, 100);
-      }, 150);
-
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
-    },
-    [runDetection]
-  );
+    setTimeout(() => setUploadProgress(40), 40);
+    setTimeout(() => setUploadProgress(85), 100);
+    setTimeout(() => {
+      setUploadProgress(100);
+      setTimeout(() => {
+        setUploadProgress(null);
+        void runDetection(file);
+      }, 100);
+    }, 150);
+  };
 
   // Load sample image
   const handleSelectSample = async (sampleSrc: string) => {
@@ -173,7 +171,6 @@ export const DetectView: React.FC<DetectViewProps> = ({ onSaveHistory }) => {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is inside an input or textarea
       const target = e.target as HTMLElement | null;
       if (
         target?.tagName === "INPUT" ||
@@ -183,42 +180,36 @@ export const DetectView: React.FC<DetectViewProps> = ({ onSaveHistory }) => {
         return;
       }
 
-      // 'U' -> trigger upload
       if (e.key === "u" || e.key === "U") {
         e.preventDefault();
         fileInputRef.current?.click();
         return;
       }
 
-      // 'Space' -> toggle labels
       if (e.code === "Space" && imagePreview) {
         e.preventDefault();
         canvasRef.current?.toggleLabels();
         return;
       }
 
-      // 'B' -> toggle bounding boxes
       if ((e.key === "b" || e.key === "B") && imagePreview) {
         e.preventDefault();
         canvasRef.current?.toggleBoxes();
         return;
       }
 
-      // 'Esc' -> clear selection
       if (e.key === "Escape") {
         setSelectedIndex(null);
         setHoveredIndex(null);
         return;
       }
 
-      // '?' -> open shortcuts dialog
       if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         setShortcutsOpen((o) => !o);
         return;
       }
 
-      // Arrow keys -> step through detections
       if (clientFilteredDetections.length > 0) {
         if (e.key === "ArrowDown" || e.key === "ArrowRight") {
           e.preventDefault();
@@ -266,7 +257,10 @@ export const DetectView: React.FC<DetectViewProps> = ({ onSaveHistory }) => {
           <div className="inline-flex p-0.5 rounded-control bg-elevated border border-border-subtle">
             <button
               type="button"
-              onClick={() => setMode("upload")}
+              onClick={() => {
+                setMode("upload");
+                if (!imagePreview) handleClear();
+              }}
               className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                 mode === "upload"
                   ? "bg-card text-text-primary shadow-sm border border-border-subtle"
