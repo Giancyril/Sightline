@@ -1,17 +1,24 @@
 import { useState, useEffect } from "react";
-import { Scan, History, Cpu, Terminal, Eye, Palette } from "lucide-react";
+import { Search } from "lucide-react";
 import { DetectView } from "./views/DetectView";
 import { HistoryView } from "./views/HistoryView";
 import { ModelView } from "./views/ModelView";
 import { ApiDocsView } from "./views/ApiDocsView";
 import { DevComponentsView } from "./views/DevComponentsView";
 import { ThemeToggle } from "./components/ui/ThemeToggle";
+import { ApiHealthDot } from "./components/shell/ApiHealthDot";
+import { CommandPalette, type NavTab } from "./components/shell/CommandPalette";
+import { MobileNav } from "./components/shell/MobileNav";
+import { PageContainer, PageHeader } from "./components/shell/PageContainer";
+import { useApiHealth } from "./hooks/useApiHealth";
+import { cn } from "./lib/utils";
 import type { HistoryRecord } from "./types";
 
+const isMac =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
 export function App() {
-  const [activeTab, setActiveTab] = useState<
-    "detect" | "history" | "model" | "api" | "dev"
-  >(() => {
+  const [activeTab, setActiveTab] = useState<NavTab>(() => {
     if (typeof window !== "undefined") {
       if (
         window.location.pathname === "/dev/components" ||
@@ -25,6 +32,8 @@ export function App() {
   });
 
   const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const apiHealth = useApiHealth();
 
   useEffect(() => {
     const handlePopState = () => {
@@ -36,7 +45,19 @@ export function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const handleTabChange = (tab: "detect" | "history" | "model" | "api" | "dev") => {
+  // Global keyboard shortcut for Cmd/Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleTabChange = (tab: NavTab) => {
     setActiveTab(tab);
     if (tab === "dev") {
       window.history.pushState(null, "", "/dev/components");
@@ -60,58 +81,63 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-canvas text-text-primary flex flex-col font-sans transition-colors duration-150">
-      {/* Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-overlay backdrop-blur-md border-b border-border-subtle">
-        <div className="max-w-container mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          {/* Logo and Title */}
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-control bg-elevated border border-border-subtle flex items-center justify-center text-text-primary">
-              <Eye className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight text-text-primary">
-                  VisionSSD
-                </span>
-                <span className="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded-chip bg-elevated text-text-secondary border border-border-subtle">
-                  v1.0.0
-                </span>
-              </div>
-              <p className="text-[11px] text-text-tertiary -mt-0.5 hidden sm:block">
-                SSD MobileNet V2 · 20-Class Open Images Detector
-              </p>
-            </div>
-          </div>
+      {/* Accessible skip link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-1.5 focus:rounded-control focus:bg-card focus:text-brand focus:border focus:border-brand focus:text-xs focus:font-medium focus:shadow-md"
+      >
+        Skip to content
+      </a>
 
-          {/* Navigation Tabs & Actions */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <nav className="flex items-center gap-1">
+      {/* 48px Top Bar */}
+      <header className="sticky top-0 z-40 h-12 bg-overlay backdrop-blur-md border-b border-border-subtle">
+        <div className="max-w-container mx-auto px-6 h-full flex items-center justify-between gap-4">
+          {/* Left: Type-based wordmark + quiet version badge */}
+          <div className="flex items-center gap-6">
+            <button
+              type="button"
+              onClick={() => handleTabChange("detect")}
+              className="flex items-center gap-2 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-control py-1 px-0.5 text-left"
+            >
+              <span className="text-sm font-semibold tracking-tight text-text-primary">
+                VisionSSD
+              </span>
+              <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-chip bg-elevated text-text-tertiary border border-border-subtle leading-none">
+                v1.0.0
+              </span>
+            </button>
+
+            {/* Desktop Navigation Tabs as underlined text links */}
+            <nav
+              className="hidden min-[720px]:flex items-center h-12 gap-1"
+              aria-label="Main Navigation"
+            >
               <button
                 type="button"
                 onClick={() => handleTabChange("detect")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-xs font-medium transition ${
+                className={cn(
+                  "relative h-12 flex items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                   activeTab === "detect"
-                    ? "bg-elevated text-text-primary border border-border-subtle shadow-sm"
-                    : "text-text-secondary hover:text-text-primary hover:bg-subtle"
-                }`}
+                    ? "text-text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
               >
-                <Scan className="w-3.5 h-3.5" />
-                <span>Detect</span>
+                Detect
               </button>
 
               <button
                 type="button"
                 onClick={() => handleTabChange("history")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-xs font-medium transition relative ${
+                className={cn(
+                  "relative h-12 flex items-center gap-1.5 px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                   activeTab === "history"
-                    ? "bg-elevated text-text-primary border border-border-subtle shadow-sm"
-                    : "text-text-secondary hover:text-text-primary hover:bg-subtle"
-                }`}
+                    ? "text-text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
               >
-                <History className="w-3.5 h-3.5" />
                 <span>History</span>
                 {history.length > 0 && (
-                  <span className="ml-1 text-[10px] font-mono px-1 py-0.2 rounded-chip bg-subtle text-text-secondary border border-border-subtle">
+                  <span className="font-mono text-[10px] px-1 py-0.2 rounded-chip bg-elevated text-text-secondary border border-border-subtle leading-none">
                     {history.length}
                   </span>
                 )}
@@ -120,95 +146,147 @@ export function App() {
               <button
                 type="button"
                 onClick={() => handleTabChange("model")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-xs font-medium transition ${
+                className={cn(
+                  "relative h-12 flex items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                   activeTab === "model"
-                    ? "bg-elevated text-text-primary border border-border-subtle shadow-sm"
-                    : "text-text-secondary hover:text-text-primary hover:bg-subtle"
-                }`}
+                    ? "text-text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
               >
-                <Cpu className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Model & Metrics</span>
-                <span className="sm:hidden">Model</span>
+                Model
               </button>
 
               <button
                 type="button"
                 onClick={() => handleTabChange("api")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-xs font-medium transition ${
+                className={cn(
+                  "relative h-12 flex items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                   activeTab === "api"
-                    ? "bg-elevated text-text-primary border border-border-subtle shadow-sm"
-                    : "text-text-secondary hover:text-text-primary hover:bg-subtle"
-                }`}
+                    ? "text-text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
               >
-                <Terminal className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">API Docs</span>
-                <span className="sm:hidden">API</span>
+                API
               </button>
 
               <button
                 type="button"
                 onClick={() => handleTabChange("dev")}
-                title="Design System Components (/dev/components)"
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-control text-xs font-medium transition ${
+                className={cn(
+                  "relative h-12 flex items-center px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                   activeTab === "dev"
-                    ? "bg-brand-subtle text-brand border border-brand/30 shadow-sm"
-                    : "text-text-tertiary hover:text-text-primary hover:bg-subtle"
-                }`}
+                    ? "text-brand font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                    : "text-text-tertiary hover:text-text-primary"
+                )}
               >
-                <Palette className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Components</span>
+                Components
               </button>
             </nav>
+          </div>
 
-            <div className="h-4 w-px bg-border-subtle hidden sm:block" />
+          {/* Right utility cluster: Command Palette, Theme, Health, Mobile menu */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Command Palette Button */}
+            <button
+              type="button"
+              onClick={() => setCommandPaletteOpen(true)}
+              className="flex items-center gap-2 h-7 px-2 text-xs text-text-secondary bg-elevated hover:bg-subtle hover:text-text-primary border border-border-subtle rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              aria-label={`Open command palette (${isMac ? "Cmd+K" : "Ctrl+K"})`}
+            >
+              <Search className="w-3.5 h-3.5 text-text-tertiary" />
+              <span className="hidden sm:inline text-text-tertiary text-xs">Search…</span>
+              <kbd className="inline-flex items-center rounded-chip bg-card border border-border-muted px-1 py-0.2 text-[10px] font-mono text-text-tertiary leading-none">
+                {isMac ? "⌘K" : "Ctrl+K"}
+              </kbd>
+            </button>
 
+            <div className="h-4 w-px bg-border-subtle" />
+
+            {/* Theme Toggle */}
             <ThemeToggle />
+
+            {/* API Health Dot with Tooltip */}
+            <ApiHealthDot health={apiHealth} />
+
+            {/* Mobile Nav for < 720px */}
+            <MobileNav
+              activeTab={activeTab}
+              onSelectTab={handleTabChange}
+              historyCount={history.length}
+            />
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-grow w-full">
+      {/* Main Content with uniform PageContainer */}
+      <main id="main-content" tabIndex={-1} className="flex-grow w-full outline-none">
         {activeTab === "detect" && (
-          <div className="max-w-container mx-auto px-4 sm:px-6 py-6">
+          <PageContainer>
+            <PageHeader
+              title="Detect"
+              description="Real-time object detection with MobileNet V2 SSD across 20 object classes."
+            />
             <DetectView onSaveHistory={handleSaveHistory} />
-          </div>
+          </PageContainer>
         )}
         {activeTab === "history" && (
-          <div className="max-w-container mx-auto px-4 sm:px-6 py-6">
+          <PageContainer>
+            <PageHeader
+              title="History"
+              description="Review past detection results, confidence scores, and timings from this session."
+            />
             <HistoryView
               history={history}
               onSelectRecord={handleSelectHistoryRecord}
               onClearHistory={handleClearHistory}
             />
-          </div>
+          </PageContainer>
         )}
         {activeTab === "model" && (
-          <div className="max-w-container mx-auto px-4 sm:px-6 py-6">
+          <PageContainer>
+            <PageHeader
+              title="Model & Metrics"
+              description="SSD MobileNet V2 architecture specifications, validation benchmarks, and class taxonomy."
+            />
             <ModelView />
-          </div>
+          </PageContainer>
         )}
         {activeTab === "api" && (
-          <div className="max-w-container mx-auto px-4 sm:px-6 py-6">
+          <PageContainer>
+            <PageHeader
+              title="API Reference"
+              description="REST API documentation, request schemas, and code samples for programmatic inference."
+            />
             <ApiDocsView />
-          </div>
+          </PageContainer>
         )}
         {activeTab === "dev" && <DevComponentsView />}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border-subtle bg-subtle py-5 text-center text-xs text-text-tertiary mt-auto">
-        <div className="max-w-container mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© 2026 VisionSSD System · Fine-Tuned PyTorch SSD MobileNet V2</p>
-          <div className="flex items-center gap-4 text-text-secondary font-mono text-[11px]">
-            <span>FastAPI Backend</span>
+      {/* Slim Footer: app version, model name, link to model page (no ports or stack details) */}
+      <footer className="border-t border-border-subtle bg-subtle py-3 text-xs text-text-tertiary mt-auto">
+        <div className="max-w-container mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-text-secondary">VisionSSD v1.0.0</span>
             <span>·</span>
-            <span>React + Vite</span>
-            <span>·</span>
-            <span className="tabular-nums">mAP@0.5: 26.44%</span>
+            <span>SSD MobileNet V2</span>
           </div>
+          <button
+            type="button"
+            onClick={() => handleTabChange("model")}
+            className="text-text-secondary hover:text-brand transition-colors text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-control px-1"
+          >
+            Model specifications & benchmarks →
+          </button>
         </div>
       </footer>
+
+      {/* Global Command Palette */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        onNavigate={handleTabChange}
+      />
     </div>
   );
 }
