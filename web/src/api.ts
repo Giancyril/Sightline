@@ -1,6 +1,8 @@
 import type { ClassesResponse, DetectionResponse, ModelInfoResponse } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_DOCS_DISPLAY_BASE_URL =
+  import.meta.env.VITE_API_PUBLIC_URL || "https://api.vision-ssd.ai";
 
 export async function detectImage(
   imageBlob: Blob | File,
@@ -55,6 +57,14 @@ export async function checkHealth(): Promise<{ status: string; model_loaded: boo
   const response = await fetch(`${API_BASE_URL}/healthz`);
   if (!response.ok) {
     throw new Error(`Health check failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchOpenApiSpec(): Promise<Record<string, unknown>> {
+  const response = await fetch(`${API_BASE_URL}/openapi.json`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch OpenAPI spec: ${response.statusText}`);
   }
   return response.json();
 }
