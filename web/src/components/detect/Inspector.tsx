@@ -223,6 +223,14 @@ export const Inspector: React.FC<InspectorProps> = ({
         className
       )}
     >
+      {/* aria-live region: announces detection count to screen readers */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {detections.length} detection{detections.length !== 1 ? "s" : ""} at current threshold
+      </div>
       {/* 1. Header & Summary Strip */}
       <div className="p-3.5 border-b border-border-subtle bg-subtle/50">
         <div className="flex items-center justify-between mb-3">

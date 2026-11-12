@@ -93,7 +93,7 @@ export const TableHead = React.forwardRef<
           <span className="text-text-tertiary">
             {sortDirection === "asc" && <ArrowUp className="w-3 h-3 text-brand" />}
             {sortDirection === "desc" && <ArrowDown className="w-3 h-3 text-brand" />}
-            {!sortDirection && <ArrowUpDown className="w-3 h-3 opacity-40" />}
+            {!sortDirection && <ArrowUpDown className="w-3 h-3 text-text-tertiary opacity-70" />}
           </span>
         )}
       </div>

@@ -326,9 +326,12 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     // Mouse move: detect hover box
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (isPanning) {
+        const nextX = e.clientX - panStart.x;
+        const nextY = e.clientY - panStart.y;
+        const maxPan = 600;
         setPan({
-          x: e.clientX - panStart.x,
-          y: e.clientY - panStart.y,
+          x: Math.max(-maxPan, Math.min(maxPan, nextX)),
+          y: Math.max(-maxPan, Math.min(maxPan, nextY)),
         });
         return;
       }
@@ -391,6 +394,9 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     return (
       <div
         ref={containerRef}
+        role="region"
+        aria-label="Object detection workspace canvas"
+        aria-keyshortcuts="Space U B F Esc ArrowLeft ArrowRight"
         className={cn(
           "relative w-full h-full min-h-[380px] bg-canvas border border-border-subtle rounded-panel overflow-hidden flex items-center justify-center select-none",
           isFullscreen && "fixed inset-0 z-50 rounded-none border-none",
@@ -399,6 +405,8 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       >
         <canvas
           ref={canvasRef}
+          role="img"
+          aria-label={`Object detection canvas: ${detections.length} objects detected`}
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}

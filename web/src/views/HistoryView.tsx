@@ -275,8 +275,17 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             return (
               <div
                 key={item.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectRecord(item)}
-                className="group relative flex flex-col overflow-hidden rounded-panel border border-border-subtle bg-card transition hover:border-border-strong hover:shadow-sm cursor-pointer select-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectRecord(item);
+                  }
+                }}
+                aria-label={`History item from ${timeAgo}: ${item.result.total_detections} detections`}
+                className="group relative flex flex-col overflow-hidden rounded-panel border border-border-subtle bg-card transition hover:border-border-strong hover:shadow-sm cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 {/* Thumbnail with pre-drawn boxes */}
                 <div className="relative aspect-video w-full overflow-hidden bg-subtle">

@@ -5,8 +5,9 @@ interface HoveredData {
   metric: BenchmarkMetric;
   type: "baseline" | "fineTuned";
   value: number;
-  x: number;
-  y: number;
+  /** SVG-space coordinates (viewBox units) */
+  svgX: number;
+  svgY: number;
 }
 
 export const GroupedMetricBars: React.FC = () => {
@@ -120,14 +121,13 @@ export const GroupedMetricBars: React.FC = () => {
                   height={baseH}
                   rx="2"
                   className="fill-text-muted/40 hover:fill-text-muted/60 transition-colors cursor-pointer"
-                  onMouseEnter={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                  onMouseEnter={() => {
                     setHovered({
                       metric: m,
                       type: "baseline",
                       value: m.baseline,
-                      x: rect.x + rect.width / 2,
-                      y: rect.y,
+                      svgX: baselineX + barWidth / 2,
+                      svgY: baseY,
                     });
                   }}
                   onMouseLeave={() => setHovered(null)}
@@ -150,14 +150,13 @@ export const GroupedMetricBars: React.FC = () => {
                   height={fineH}
                   rx="2"
                   className="fill-brand hover:opacity-90 transition-opacity cursor-pointer"
-                  onMouseEnter={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
+                  onMouseEnter={() => {
                     setHovered({
                       metric: m,
                       type: "fineTuned",
                       value: m.fineTuned,
-                      x: rect.x + rect.width / 2,
-                      y: rect.y,
+                      svgX: fineTunedX + barWidth / 2,
+                      svgY: fineY,
                     });
                   }}
                   onMouseLeave={() => setHovered(null)}
@@ -193,26 +192,51 @@ export const GroupedMetricBars: React.FC = () => {
               </g>
             );
           })}
+          {/* In-SVG vector tooltip: responsive, respects viewport, cannot clip */}
+          {hovered && (
+            <g
+              className="pointer-events-none transition-all duration-150"
+              transform={`translate(${hovered.svgX}, ${Math.max(48, hovered.svgY - 10)})`}
+            >
+              <rect
+                x="-65"
+                y="-44"
+                width="130"
+                height="44"
+                rx="4"
+                className="fill-card stroke-border-subtle"
+                strokeWidth="1"
+              />
+              <text
+                x="0"
+                y="-30"
+                textAnchor="middle"
+                className="fill-text-primary text-[10px] font-semibold"
+              >
+                {hovered.metric.name}
+              </text>
+              <text
+                x="0"
+                y="-18"
+                textAnchor="middle"
+                className="fill-text-secondary text-[9px]"
+              >
+                {hovered.type === "baseline" ? "Baseline" : "Fine-Tuned"}:{" "}
+                <tspan className="font-mono font-medium fill-text-primary">
+                  {hovered.value.toFixed(4)}
+                </tspan>
+              </text>
+              <text
+                x="0"
+                y="-7"
+                textAnchor="middle"
+                className="fill-brand text-[8px] font-mono"
+              >
+                Target: {hovered.metric.target}
+              </text>
+            </g>
+          )}
         </svg>
-
-        {/* Floating tooltip */}
-        {hovered && (
-          <div
-            className="pointer-events-none fixed z-50 rounded-control bg-card border border-border-default px-2.5 py-1.5 shadow-md text-xs -translate-x-1/2 -translate-y-full -mt-2"
-            style={{ left: hovered.x, top: hovered.y }}
-          >
-            <div className="font-semibold text-text-primary">{hovered.metric.name}</div>
-            <div className="text-text-muted text-[11px] mt-0.5 flex items-center justify-between gap-4">
-              <span>{hovered.type === "baseline" ? "Baseline" : "Fine-Tuned"}:</span>
-              <span className="font-mono font-medium text-text-primary">
-                {hovered.value.toFixed(4)}
-              </span>
-            </div>
-            <div className="text-[10px] text-brand mt-0.5">
-              Target: {hovered.metric.target}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

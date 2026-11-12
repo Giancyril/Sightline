@@ -119,8 +119,24 @@ make commit-stage N=0 MSG="bootstrap repository and tooling"
 | Regression on shared COCO classes | ≤ 2 pts drop | **+2.1 pts (gained)** ✅ |
 | Warm p95 API inference latency (CPU) | ≤ 300 ms | **< 300 ms** ✅ |
 | Lighthouse accessibility score | ≥ 95 | ✅ |
-| Initial JS bundle (gzipped) | ≤ 250 KB | **~80 KB** ✅ |
+| Initial JS bundle (gzipped) | ≤ 250 KB | **~160 KB** ✅ |
 | API test coverage | ≥ 80 % | ✅ |
+
+---
+
+## 📸 User Interface (v2)
+
+The web frontend features a modernized, professional computer vision workspace inspired by Linear, Vercel Geist, and Roboflow:
+
+| Detect Workspace (Dark) | Detect Workspace (Light) |
+|:---:|:---:|
+| ![Detect Workspace Dark](docs/screenshots/stage-8/desktop-dark.png) | ![Detect Workspace Light](docs/screenshots/stage-8/desktop-light.png) |
+
+| Model Metrics & PR Curves | API Reference & Try-It Console |
+|:---:|:---:|
+| ![Model Metrics](docs/screenshots/stage-6/desktop-dark.png) | ![API Docs Console](docs/screenshots/stage-7/desktop-dark.png) |
+
+*For complete release details, architectural patterns borrowed, and stage logs, see [`CHANGELOG.md`](CHANGELOG.md).*
 
 ---
 

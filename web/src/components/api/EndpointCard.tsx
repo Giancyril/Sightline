@@ -194,3 +194,4 @@ export const EndpointCard: React.FC<EndpointCardProps> = ({ endpoint }) => {
     </article>
   );
 };
+
