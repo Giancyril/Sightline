@@ -10,6 +10,7 @@ and coordinate conversion.
 from __future__ import annotations
 
 import io
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -18,8 +19,10 @@ import numpy as np
 import torch
 from PIL import Image, ImageOps
 
-from ml.data.classes import CLASSES, ClassInfo
+from ml.data.classes import CLASS_BY_ID, CLASSES, ClassInfo
 from ml.data.transforms import generate_ssd_anchors
+from ml.models.coco_labels import COCO_CLASSES, map_coco_id_to_subset
+from ml.models.registry import ModelEntry, get_model_entry
 from ml.models.ssd_mobilenet import SSDMobileNetV2, postprocess_ssd_predictions
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB limit
@@ -38,12 +41,31 @@ class ImageValidationError(ValueError):
         self.status_code = status_code
 
 
-class DetectorService:
-    """Thread-safe detector service caching the fine-tuned SSD MobileNet V2."""
+class UnknownModelError(KeyError):
+    """Raised when a requested model ID is not found in the registry."""
 
-    def __init__(self, checkpoint_path: str | Path | None = None) -> None:
+    def __init__(self, model_id: str) -> None:
+        super().__init__(f"Unknown model identifier '{model_id}'.")
+        self.model_id = model_id
+        self.status_code = 404
+
+
+class DetectorService:
+    """Thread-safe detector service executing SSD MobileNet V2 inference."""
+
+    def __init__(
+        self,
+        model_id: str = "fine-tuned",
+        model_name: str = "SSD MobileNet V2 (Open Images 20-Class)",
+        model_version: str = "v1.0.0",
+        num_classes: int = 21,
+        checkpoint_path: str | Path | None = None,
+    ) -> None:
+        self.model_id = model_id
+        self.model_name = model_name
+        self.model_version = model_version
+        self.num_classes = num_classes
         self.device = torch.device("cpu")
-        self.num_classes = 21  # 20 target classes + 1 background
         self.model = SSDMobileNetV2(num_classes=self.num_classes).to(self.device)
         self.model.eval()
 
@@ -172,9 +194,28 @@ class DetectorService:
             px_h = max(0, px_ymax - px_ymin)
 
             c_info = self.class_map.get(class_id)
-            c_name = c_info.name if c_info else f"Class_{class_id}"
-            c_hex = c_info.color_hex if c_info else "#0072B2"
-            c_rgb = list(c_info.color_rgb) if c_info else [0, 114, 178]
+            if c_info:
+                c_name = c_info.name
+                c_hex = c_info.color_hex
+                c_rgb = list(c_info.color_rgb)
+            elif self.model_id == "coco-baseline" and 1 <= class_id < len(COCO_CLASSES):
+                coco_raw = COCO_CLASSES[class_id]
+                subset_id, subset_name, is_target = map_coco_id_to_subset(class_id)
+                if is_target and subset_id is not None:
+                    target_info = CLASS_BY_ID.get(subset_id)
+                    c_name = target_info.name if target_info else coco_raw.title()
+                    c_hex = target_info.color_hex if target_info else "#0072B2"
+                    c_rgb = (
+                        list(target_info.color_rgb) if target_info else [0, 114, 178]
+                    )
+                else:
+                    c_name = coco_raw.title()
+                    c_hex = "#56B4E9"
+                    c_rgb = [86, 180, 233]
+            else:
+                c_name = f"Class_{class_id}"
+                c_hex = "#0072B2"
+                c_rgb = [0, 114, 178]
 
             formatted_detections.append(
                 {
@@ -203,8 +244,9 @@ class DetectorService:
         total_ms = (time.perf_counter() - start_total) * 1000.0
 
         return {
-            "model_name": "SSD MobileNet V2 (Open Images 20-Class)",
-            "model_version": "v1.0.0",
+            "model_id": self.model_id,
+            "model_name": self.model_name,
+            "model_version": self.model_version,
             "total_detections": len(formatted_detections),
             "inference_time_ms": round(inference_ms, 2),
             "total_time_ms": round(total_ms, 2),
@@ -221,25 +263,78 @@ class DetectorService:
         }
 
 
-# Global singleton instance
-_detector_instance: DetectorService | None = None
+class ModelCache:
+    """Thread-safe lazy-loading cache for registered detection models."""
 
+    def __init__(self, registry_path: str | Path | None = None) -> None:
+        self._lock = threading.RLock()
+        self._cache: dict[str, DetectorService] = {}
+        self.registry_path = registry_path
 
-def get_detector() -> DetectorService:
-    """Retrieve or initialize the global DetectorService singleton."""
-    global _detector_instance
-    if _detector_instance is None:
+    def get(self, model_id: str = "fine-tuned") -> DetectorService:
+        """
+        Retrieve a model from cache or lazily load it on first use.
+        Thread-safe. Raises UnknownModelError if model_id is not registered.
+        """
+        with self._lock:
+            if model_id in self._cache:
+                return self._cache[model_id]
+
+            entry = get_model_entry(model_id, self.registry_path)
+            if entry is None:
+                raise UnknownModelError(model_id)
+
+            detector = self._create_detector(entry)
+            self._cache[model_id] = detector
+            return detector
+
+    def _create_detector(self, entry: ModelEntry) -> DetectorService:
         root = Path(__file__).parent.parent.parent
-        # Prefer exported weights if they exist, otherwise instantiate fresh
-        weights_candidates = [
-            root / "ml" / "export" / "ssd_mobilenet_v2_openimages20_weights.pth",
-            root / "ml" / "checkpoints" / "best_model.pth",
-        ]
-        weights_path = None
-        for p in weights_candidates:
-            if p.exists():
-                weights_path = p
-                break
+        checkpoint_path: Path | None = None
+        if entry.path:
+            cand = root / entry.path
+            if cand.exists():
+                checkpoint_path = cand
 
-        _detector_instance = DetectorService(checkpoint_path=weights_path)
-    return _detector_instance
+        return DetectorService(
+            model_id=entry.id,
+            model_name=entry.display_name,
+            model_version=entry.version,
+            num_classes=81 if entry.id == "coco-baseline" else 21,
+            checkpoint_path=checkpoint_path,
+        )
+
+    def is_loaded(self, model_id: str) -> bool:
+        """Check whether a model is currently loaded in memory."""
+        with self._lock:
+            return model_id in self._cache
+
+    def loaded_model_ids(self) -> list[str]:
+        """Return list of currently loaded model IDs."""
+        with self._lock:
+            return list(self._cache.keys())
+
+    def clear(self) -> None:
+        """Clear all loaded models from cache."""
+        with self._lock:
+            self._cache.clear()
+
+
+# Global cache instance
+_cache_instance: ModelCache | None = None
+_cache_lock = threading.Lock()
+
+
+def get_model_cache() -> ModelCache:
+    """Retrieve or initialize the global thread-safe ModelCache singleton."""
+    global _cache_instance
+    if _cache_instance is None:
+        with _cache_lock:
+            if _cache_instance is None:
+                _cache_instance = ModelCache()
+    return _cache_instance
+
+
+def get_detector(model_id: str = "fine-tuned") -> DetectorService:
+    """Retrieve or lazily load the requested detector model."""
+    return get_model_cache().get(model_id)

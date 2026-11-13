@@ -38,9 +38,7 @@ class PixelBBox(BaseModel):
 class DetectionItem(BaseModel):
     """Single detected object instance."""
 
-    class_id: int = Field(
-        ..., ge=1, le=20, description="1-indexed Open Images class ID"
-    )
+    class_id: int = Field(..., ge=1, le=90, description="1-indexed class ID")
     class_name: str = Field(..., description="Human-readable class name")
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Detection confidence score"
@@ -71,6 +69,7 @@ class ThresholdsApplied(BaseModel):
 class DetectionResponse(BaseModel):
     """Response payload for POST /v1/detect."""
 
+    model_id: str = Field(default="fine-tuned", description="Model registry ID")
     model_name: str = Field(..., description="Model identifier")
     model_version: str = Field(..., description="Model version tag")
     total_detections: int = Field(..., ge=0, description="Count of detected objects")
