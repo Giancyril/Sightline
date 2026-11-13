@@ -75,7 +75,8 @@ ml/export/*.tflite
 *.pt
 *.onnx
 /weights/
-/models/
+/models/*
+!/models/*.json
 
 # Logs & Experiment Tracking
 logs/

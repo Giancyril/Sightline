@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ModelRegistry",
+  "description": "Schema for VisionSSD model registry definitions.",
+  "type": "object",
+  "required": ["models"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ModelEntry"
+      }
+    }
+  },
+  "definitions": {
+    "ModelEntry": {
+      "type": "object",
+      "required": [
+        "id",
+        "display_name",
+        "version",
+        "path",
+        "input_size",
+        "class_list",
+        "metrics"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the model (e.g. fine-tuned, coco-baseline)"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Human-readable model name"
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic model version string"
+        },
+        "path": {
+          "type": ["string", "null"],
+          "description": "Relative path to weights/checkpoint, or null if pre-packaged"
+        },
+        "input_size": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Input dimensions as [width, height] in pixels"
+        },
+        "class_list": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Ordered list of supported class names"
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "description": "Key-value mapping of benchmark metrics"
+        }
+      }
+    }
+  }
+}
