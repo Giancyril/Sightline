@@ -134,3 +134,27 @@ class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
     version: str
+
+
+class ModelRegistryItem(BaseModel):
+    """Registered model metadata including current runtime loading status."""
+
+    id: str = Field(..., description="Unique model identifier")
+    display_name: str = Field(..., description="Human-readable model name")
+    version: str = Field(..., description="Semantic version string")
+    path: str | None = Field(default=None, description="Path to model checkpoint")
+    input_size: list[int] = Field(..., description="Input dimensions [W, H]")
+    num_classes: int = Field(..., description="Total class count")
+    class_list: list[str] = Field(..., description="Supported class names")
+    metrics: dict[str, float] = Field(..., description="Validation benchmark metrics")
+    loaded: bool = Field(..., description="Whether model is currently loaded in memory")
+    status: str = Field(..., description="Runtime status: 'loaded' or 'ready'")
+
+
+class ModelsResponse(BaseModel):
+    """Response payload for GET /v1/models."""
+
+    total_models: int = Field(..., description="Number of registered models")
+    models: list[ModelRegistryItem] = Field(
+        ..., description="List of registered model entries"
+    )

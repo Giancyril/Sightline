@@ -11,8 +11,14 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from api.schemas import ModelInfoResponse, ModelMetrics
-from api.services.detector import MAX_FILE_SIZE_BYTES
+from api.schemas import (
+    ModelInfoResponse,
+    ModelMetrics,
+    ModelRegistryItem,
+    ModelsResponse,
+)
+from api.services.detector import MAX_FILE_SIZE_BYTES, get_model_cache
+from ml.models.registry import load_model_registry
 
 router = APIRouter(prefix="/v1", tags=["Model Metadata"])
 
@@ -64,3 +70,38 @@ def get_model_info() -> ModelInfoResponse:
             coco_mAP_50_95=m_range,
         ),
     )
+
+
+@router.get(
+    "/models",
+    response_model=ModelsResponse,
+    summary="List all registered models with loading status",
+    description=(
+        "Returns metadata, supported class lists, benchmark metrics, "
+        "and runtime in-memory status for each registered model."
+    ),
+)
+def list_models() -> ModelsResponse:
+    """Return registry of available detection models and their current in-memory status."""
+    registry = load_model_registry()
+    cache = get_model_cache()
+
+    items = []
+    for entry in registry:
+        loaded = cache.is_loaded(entry.id)
+        items.append(
+            ModelRegistryItem(
+                id=entry.id,
+                display_name=entry.display_name,
+                version=entry.version,
+                path=entry.path,
+                input_size=entry.input_size,
+                num_classes=len(entry.class_list),
+                class_list=entry.class_list,
+                metrics=entry.metrics,
+                loaded=loaded,
+                status="loaded" if loaded else "ready",
+            )
+        )
+
+    return ModelsResponse(total_models=len(items), models=items)
