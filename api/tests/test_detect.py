@@ -14,7 +14,7 @@ from __future__ import annotations
 import io
 
 import pytest
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Response, UploadFile
 from PIL import Image
 
 from api.main import app
@@ -131,10 +131,16 @@ def test_get_model_metadata():
 def test_detect_jpeg_success():
     """Test object detection with a standard JPEG image."""
     data = create_test_image(width=320, height=240, fmt="JPEG")
+    # Warmup detector to eliminate cold-start graph initialization overhead
+    get_detector().detect(data)
+
     upload = make_upload_file(data, "photo.jpg")
 
     response = detect_objects(
-        file=upload, confidence_threshold=0.25, nms_iou_threshold=0.45
+        response=Response(),
+        file=upload,
+        confidence_threshold=0.25,
+        nms_iou_threshold=0.45,
     )
     assert isinstance(response, DetectionResponse)
     assert response.image_dimensions.width == 320
@@ -177,7 +183,9 @@ def test_detect_png_success():
     data = create_test_image(width=150, height=150, fmt="PNG")
     upload = make_upload_file(data, "icon.png")
 
-    response = detect_objects(file=upload, confidence_threshold=0.20)
+    response = detect_objects(
+        response=Response(), file=upload, confidence_threshold=0.20
+    )  # type: ignore[arg-type]
     assert isinstance(response, DetectionResponse)
     assert response.image_dimensions.width == 150
     assert response.image_dimensions.height == 150
@@ -187,7 +195,7 @@ def test_detect_empty_payload_raises_400():
     """Empty payload must raise 400 Bad Request."""
     upload = make_upload_file(b"", "empty.jpg")
     with pytest.raises(HTTPException) as exc_info:
-        detect_objects(file=upload)
+        detect_objects(response=Response(), file=upload)  # type: ignore[arg-type]
     assert exc_info.value.status_code == 400
     assert "Empty image" in exc_info.value.detail
 
@@ -197,7 +205,7 @@ def test_detect_unsupported_format_raises_415():
     text_data = b"Hello, this is a plain text file, not an image!"
     upload = make_upload_file(text_data, "document.txt")
     with pytest.raises(HTTPException) as exc_info:
-        detect_objects(file=upload)
+        detect_objects(response=Response(), file=upload)  # type: ignore[arg-type]
     assert exc_info.value.status_code == 415
     assert "Unsupported file format" in exc_info.value.detail
 
@@ -218,7 +226,9 @@ def test_detect_high_confidence_threshold():
     data = create_test_image(width=300, height=300, fmt="JPEG")
     upload = make_upload_file(data, "photo.jpg")
 
-    response = detect_objects(file=upload, confidence_threshold=0.999)
+    response = detect_objects(
+        response=Response(), file=upload, confidence_threshold=0.999
+    )  # type: ignore[arg-type]
     assert isinstance(response, DetectionResponse)
     for det in response.detections:
         assert det.confidence >= 0.999
@@ -238,3 +248,78 @@ def test_detector_service_latency():
     assert result["inference_time_ms"] < 300.0, (
         f"Inference latency {result['inference_time_ms']} ms exceeds 300 ms SLA"
     )
+
+
+# ---------------------------------------------------------------------------
+# Commit 4: model_id query param on POST /v1/detect
+# ---------------------------------------------------------------------------
+
+
+def test_detect_default_model_id():
+    """When no model_id supplied the fine-tuned model is used."""
+    data = create_test_image(width=300, height=300, fmt="JPEG")
+    upload = make_upload_file(data, "photo.jpg")
+
+    response = detect_objects(
+        response=Response(),
+        file=upload,
+        confidence_threshold=0.25,
+        nms_iou_threshold=0.45,
+    )
+    assert isinstance(response, DetectionResponse)
+    assert response.model_id == "fine-tuned"
+
+
+def test_detect_explicit_model_id_fine_tuned():
+    """Explicitly passing model_id='fine-tuned' returns the same model."""
+    data = create_test_image(width=300, height=300, fmt="JPEG")
+    upload = make_upload_file(data, "photo.jpg")
+
+    response = detect_objects(
+        response=Response(),
+        file=upload,
+        model_id="fine-tuned",
+        confidence_threshold=0.25,
+        nms_iou_threshold=0.45,
+    )
+    assert isinstance(response, DetectionResponse)
+    assert response.model_id == "fine-tuned"
+    assert response.model_version == "v1.0.0"
+
+
+def test_detect_unknown_model_id_raises_404():
+    """An unknown model_id must raise HTTPException 404."""
+    data = create_test_image(width=300, height=300, fmt="JPEG")
+    upload = make_upload_file(data, "photo.jpg")
+
+    with pytest.raises(HTTPException) as exc_info:
+        detect_objects(
+            response=Response(),
+            file=upload,
+            model_id="does-not-exist",
+            confidence_threshold=0.25,
+            nms_iou_threshold=0.45,
+        )
+    assert exc_info.value.status_code == 404
+    assert "does-not-exist" in exc_info.value.detail
+
+
+def test_detect_response_includes_model_id_and_version():
+    """DetectionResponse body must carry model_id and model_version fields, and set response headers."""
+    data = create_test_image(width=300, height=300, fmt="JPEG")
+    upload = make_upload_file(data, "photo.jpg")
+    res = Response()
+
+    response = detect_objects(
+        response=res,
+        file=upload,
+        model_id="fine-tuned",
+        confidence_threshold=0.25,
+        nms_iou_threshold=0.45,
+    )
+    assert isinstance(response, DetectionResponse)
+    assert response.model_id == "fine-tuned"
+    assert response.model_version  # non-empty string
+    assert response.model_name  # non-empty string
+    assert res.headers.get("X-Model-Id") == "fine-tuned"
+    assert res.headers.get("X-Model-Version") == "v1.0.0"

@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Response, UploadFile
 from PIL import Image
 
 from api.main import app
@@ -66,7 +66,10 @@ def test_e2e_multi_aspect_ratio_detection(width: int, height: int):
     )
 
     response = detect_objects(
-        file=upload, confidence_threshold=0.25, nms_iou_threshold=0.45
+        response=Response(),
+        file=upload,
+        confidence_threshold=0.25,
+        nms_iou_threshold=0.45,
     )
 
     assert isinstance(response, DetectionResponse)
@@ -208,7 +211,7 @@ def test_error_status_contracts():
     # 400 Bad Request on empty file
     upload_empty = UploadFile(filename="empty.jpg", file=io.BytesIO(b""))
     with pytest.raises(HTTPException) as exc400:
-        detect_objects(file=upload_empty)
+        detect_objects(response=Response(), file=upload_empty)  # type: ignore[arg-type]
     assert exc400.value.status_code == 400
 
     # 415 Unsupported Media Type on non-image data
@@ -216,7 +219,7 @@ def test_error_status_contracts():
         filename="test.txt", file=io.BytesIO(b"Plain text file content")
     )
     with pytest.raises(HTTPException) as exc415:
-        detect_objects(file=upload_text)
+        detect_objects(response=Response(), file=upload_text)  # type: ignore[arg-type]
     assert exc415.value.status_code == 415
 
     # 413 Payload Too Large on files > 10MB
