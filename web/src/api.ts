@@ -1,4 +1,4 @@
-import type { ClassesResponse, DetectionResponse, ModelInfoResponse } from "./types";
+import type { ClassesResponse, DetectionResponse, ModelInfoResponse, ModelsResponse } from "./types";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export const API_DOCS_DISPLAY_BASE_URL =
@@ -7,7 +7,8 @@ export const API_DOCS_DISPLAY_BASE_URL =
 export async function detectImage(
   imageBlob: Blob | File,
   confidenceThreshold: number = 0.25,
-  nmsIouThreshold: number = 0.45
+  nmsIouThreshold: number = 0.45,
+  modelId?: string
 ): Promise<DetectionResponse> {
   const formData = new FormData();
   formData.append("file", imageBlob, "image.jpg");
@@ -15,6 +16,9 @@ export async function detectImage(
   const url = new URL(`${API_BASE_URL}/v1/detect`);
   url.searchParams.set("confidence_threshold", confidenceThreshold.toString());
   url.searchParams.set("nms_iou_threshold", nmsIouThreshold.toString());
+  if (modelId) {
+    url.searchParams.set("model_id", modelId);
+  }
 
   const response = await fetch(url.toString(), {
     method: "POST",
@@ -49,6 +53,14 @@ export async function fetchModelInfo(): Promise<ModelInfoResponse> {
   const response = await fetch(`${API_BASE_URL}/v1/model`);
   if (!response.ok) {
     throw new Error(`Failed to fetch model info: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchModels(): Promise<ModelsResponse> {
+  const response = await fetch(`${API_BASE_URL}/v1/models`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models: ${response.statusText}`);
   }
   return response.json();
 }

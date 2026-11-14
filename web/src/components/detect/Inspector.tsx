@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Sliders,
   AlertTriangle,
@@ -13,8 +13,10 @@ import {
   ArrowUp,
   ArrowDown,
   Pin,
+  Cpu,
 } from "lucide-react";
-import type { DetectionItem } from "../../types";
+import type { DetectionItem, ModelRegistryItem } from "../../types";
+import { fetchModels } from "../../api";
 import { colorForClass } from "../../lib/colors";
 import { Slider } from "../ui/Slider";
 import { Button } from "../ui/Button";
@@ -38,6 +40,8 @@ interface InspectorProps {
   errorMsg: string | null;
   onRetry: () => void;
   isApiOffline?: boolean;
+  selectedModelId?: string;
+  onModelChange?: (modelId: string) => void;
   className?: string;
 }
 
@@ -58,8 +62,54 @@ export const Inspector: React.FC<InspectorProps> = ({
   errorMsg,
   onRetry,
   isApiOffline = false,
+  selectedModelId = "fine-tuned",
+  onModelChange,
   className,
 }) => {
+  // Model registry state
+  const [models, setModels] = useState<ModelRegistryItem[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  const handleRetryModels = useCallback(() => {
+    setIsLoadingModels(true);
+    setModelsError(null);
+    fetchModels()
+      .then((res) => {
+        setModels(res.models);
+      })
+      .catch((err) => {
+        setModelsError((err as Error).message || "Failed to load models");
+      })
+      .finally(() => {
+        setIsLoadingModels(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchModels()
+      .then((res) => {
+        if (active) {
+          setModels(res.models);
+          setIsLoadingModels(false);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setModelsError((err as Error).message || "Failed to load models");
+          setIsLoadingModels(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const activeModel = useMemo(() => {
+    return models.find((m) => m.id === selectedModelId) || models[0] || null;
+  }, [models, selectedModelId]);
+
   // Class filter state
   const [selectedClassFilter, setSelectedClassFilter] = useState<string | null>(null);
 
@@ -233,13 +283,53 @@ export const Inspector: React.FC<InspectorProps> = ({
       </div>
       {/* 1. Header & Summary Strip */}
       <div className="p-3.5 border-b border-border-subtle bg-subtle/50">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
             Inspection
           </span>
-          <span className="text-[11px] font-mono text-text-secondary">
-            SSD MobileNet V2
-          </span>
+          {activeModel && (
+            <Badge variant="neutral" mono>
+              {activeModel.version}
+            </Badge>
+          )}
+        </div>
+
+        {/* Model Selector */}
+        <div className="mb-3">
+          {isLoadingModels ? (
+            <Skeleton className="h-8 w-full rounded-control" />
+          ) : modelsError ? (
+            <div className="flex items-center justify-between p-2 rounded-control bg-status-danger-subtle border border-status-danger/20 text-status-danger text-xs">
+              <span className="truncate">{modelsError}</span>
+              <button
+                type="button"
+                onClick={handleRetryModels}
+                className="underline text-[11px] font-medium shrink-0 ml-2 hover:opacity-80"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <select
+                id="model-selector"
+                aria-label="Select detection model"
+                value={selectedModelId}
+                disabled={isLoading}
+                onChange={(e) => onModelChange?.(e.target.value)}
+                className="w-full h-8 pl-2.5 pr-8 py-1 text-xs font-medium bg-card text-text-primary border border-border-subtle rounded-control hover:border-border-muted focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand cursor-pointer appearance-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.display_name} ({m.num_classes} classes)
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-tertiary">
+                <Cpu className="w-3.5 h-3.5" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3 Summary metrics */}

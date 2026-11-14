@@ -36,6 +36,7 @@ export interface ThresholdsApplied {
 }
 
 export interface DetectionResponse {
+  model_id?: string;
   model_name: string;
   model_version: string;
   total_detections: number;
@@ -44,6 +45,24 @@ export interface DetectionResponse {
   image_dimensions: ImageDimensions;
   thresholds_applied: ThresholdsApplied;
   detections: DetectionItem[];
+}
+
+export interface ModelRegistryItem {
+  id: string;
+  display_name: string;
+  version: string;
+  path: string | null;
+  input_size: [number, number];
+  num_classes: number;
+  class_list: string[];
+  metrics: Record<string, number>;
+  loaded: boolean;
+  status: string;
+}
+
+export interface ModelsResponse {
+  total_models: number;
+  models: ModelRegistryItem[];
 }
 
 export interface ClassItem {

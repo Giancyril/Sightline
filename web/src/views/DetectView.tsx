@@ -59,6 +59,15 @@ export const DetectView: React.FC<DetectViewProps> = ({
   // Shortcuts Dialog state
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
 
+  // Model selector state (persisted in localStorage)
+  const [selectedModelId, setSelectedModelId] = useState<string>(() => {
+    try {
+      return localStorage.getItem("vision_ssd_selected_model") || "fine-tuned";
+    } catch {
+      return "fine-tuned";
+    }
+  });
+
   // Accessibility aria-live announcement
   const [announcement, setAnnouncement] = useState<string>("");
 
@@ -66,7 +75,11 @@ export const DetectView: React.FC<DetectViewProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Run backend detection
-  const runDetection = async (blob: Blob, nms: number = nmsThreshold) => {
+  const runDetection = async (
+    blob: Blob,
+    nms: number = nmsThreshold,
+    modelId: string = selectedModelId
+  ) => {
     try {
       setIsDetecting(true);
       setErrorMsg(null);
@@ -75,7 +88,7 @@ export const DetectView: React.FC<DetectViewProps> = ({
       setHoveredIndex(null);
 
       // Fetch at baseline 0.05 to allow zero-latency client-side re-filtering
-      const res = await detectImage(blob, 0.05, nms);
+      const res = await detectImage(blob, 0.05, nms, modelId);
       setRawResult(res);
 
       const count = res.detections.filter((d) => d.confidence >= confThreshold).length;
@@ -105,6 +118,18 @@ export const DetectView: React.FC<DetectViewProps> = ({
       }
     } finally {
       setIsDetecting(false);
+    }
+  };
+
+  const handleModelChange = (modelId: string) => {
+    setSelectedModelId(modelId);
+    try {
+      localStorage.setItem("vision_ssd_selected_model", modelId);
+    } catch {
+      // ignore
+    }
+    if (currentBlob) {
+      void runDetection(currentBlob, nmsThreshold, modelId);
     }
   };
 
@@ -409,6 +434,8 @@ export const DetectView: React.FC<DetectViewProps> = ({
               errorMsg={errorMsg}
               onRetry={handleRetry}
               isApiOffline={isApiOffline}
+              selectedModelId={selectedModelId}
+              onModelChange={handleModelChange}
             />
           </div>
         </div>
