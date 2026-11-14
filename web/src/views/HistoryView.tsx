@@ -317,7 +317,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         <Clock className="w-3 h-3" />
                         <span>{timeAgo}</span>
                       </span>
-                      <span className="font-mono text-[10px]">{item.timestamp}</span>
+                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-chip bg-elevated border border-border-subtle text-text-secondary">
+                        {item.model_id || item.result.model_id || "fine-tuned"}
+                      </span>
                     </div>
 
                     {/* Class Chips */}
@@ -381,6 +383,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <TableRow>
               <TableHead className="w-20">Preview</TableHead>
               <TableHead>Time</TableHead>
+              <TableHead>Model</TableHead>
               <TableHead>Objects</TableHead>
               <TableHead>Classes</TableHead>
               <TableHead>Latency</TableHead>
@@ -418,6 +421,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       <span className="font-medium text-text-primary text-xs">{timeAgo}</span>
                       <span className="text-[10px] text-text-tertiary font-mono">{item.timestamp}</span>
                     </div>
+                  </TableCell>
+
+                  {/* Model */}
+                  <TableCell>
+                    <Badge variant="neutral" mono>
+                      {item.model_id || item.result.model_id || "fine-tuned"}
+                    </Badge>
                   </TableCell>
 
                   {/* Objects */}

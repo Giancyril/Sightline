@@ -110,6 +110,7 @@ export interface HistoryRecord {
   timestamp: string;
   previewUrl: string;
   result: DetectionResponse;
+  model_id?: string;
   createdAt?: number;
   thumbnail?: string;
 }

@@ -101,6 +101,7 @@ export const DetectView: React.FC<DetectViewProps> = ({
         timestamp: new Date().toLocaleTimeString(),
         previewUrl: URL.createObjectURL(blob),
         result: res,
+        model_id: res.model_id || modelId,
       });
     } catch (err) {
       const message = (err as Error).message;

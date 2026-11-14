@@ -12,6 +12,7 @@ import {
   Layers,
   Clock,
   Box,
+  CheckCircle2,
 } from "lucide-react";
 import { compareModels, fetchModels } from "../api";
 import { Button } from "../components/ui/Button";
@@ -20,6 +21,7 @@ import { Skeleton } from "../components/ui/Skeleton";
 import { Slider } from "../components/ui/Slider";
 import { Tooltip } from "../components/ui/Tooltip";
 import { colorForClass } from "../lib/colors";
+import { matchDetections } from "../lib/iouMatching";
 import { cn } from "../lib/utils";
 import type { CompareResponse, DetectionItem, ModelRegistryItem } from "../types";
 
@@ -35,6 +37,7 @@ export const CompareView: React.FC = () => {
   // Threshold states
   const [confThreshold, setConfThreshold] = useState<number>(0.25);
   const [nmsThreshold, setNmsThreshold] = useState<number>(0.45);
+  const [highlightUniques, setHighlightUniques] = useState<boolean>(true);
 
   // Image & Execution state
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -97,6 +100,33 @@ export const CompareView: React.FC = () => {
     );
   }, [compareResult, confThreshold]);
 
+  // IoU Matching calculation between model A and model B
+  const comparisonMatch = useMemo(() => {
+    return matchDetections(filteredDetectionsA, filteredDetectionsB, 0.45, true);
+  }, [filteredDetectionsA, filteredDetectionsB]);
+
+  const onlyASet = useMemo(
+    () => new Set(comparisonMatch.onlyA),
+    [comparisonMatch]
+  );
+  const onlyBSet = useMemo(
+    () => new Set(comparisonMatch.onlyB),
+    [comparisonMatch]
+  );
+
+  // Statistical summary metrics
+  const meanScoreA = useMemo(() => {
+    if (filteredDetectionsA.length === 0) return 0;
+    const sum = filteredDetectionsA.reduce((acc, d) => acc + d.confidence, 0);
+    return Math.round((sum / filteredDetectionsA.length) * 100);
+  }, [filteredDetectionsA]);
+
+  const meanScoreB = useMemo(() => {
+    if (filteredDetectionsB.length === 0) return 0;
+    const sum = filteredDetectionsB.reduce((acc, d) => acc + d.confidence, 0);
+    return Math.round((sum / filteredDetectionsB.length) * 100);
+  }, [filteredDetectionsB]);
+
   // Execute comparison
   const runComparison = useCallback(
     async (blob: Blob, modA = modelA, modB = modelB, nms = nmsThreshold) => {
@@ -130,20 +160,21 @@ export const CompareView: React.FC = () => {
     };
   };
 
-  // Synchronized canvas drawer
+  // Synchronized canvas drawer with unique-object highlights
   const drawDetections = useCallback(
     (
       ctx: CanvasRenderingContext2D,
       cw: number,
       ch: number,
       dets: DetectionItem[],
+      uniqueSet: Set<DetectionItem>,
+      modelType: "A" | "B",
       clipRect?: { left: number; right: number }
     ) => {
       if (!imageElement) return;
 
       ctx.clearRect(0, 0, cw, ch);
 
-      // Save state for clipping
       ctx.save();
       if (clipRect) {
         ctx.beginPath();
@@ -168,36 +199,59 @@ export const CompareView: React.FC = () => {
 
       // Draw bounding boxes
       for (const det of dets) {
+        const isUnique = highlightUniques && uniqueSet.has(det);
         const col = colorForClass(det.class_id);
         const x = ox + det.box_normalized.xmin * imageElement.width * totalScale;
         const y = oy + det.box_normalized.ymin * imageElement.height * totalScale;
         const w = (det.box_normalized.xmax - det.box_normalized.xmin) * imageElement.width * totalScale;
         const h = (det.box_normalized.ymax - det.box_normalized.ymin) * imageElement.height * totalScale;
 
-        // Box stroke
-        ctx.strokeStyle = col.hex;
-        ctx.lineWidth = Math.max(1.5, 2 * (totalScale / baseScale));
-        ctx.strokeRect(x, y, w, h);
+        if (isUnique) {
+          // Highlight unique boxes with amber (Model A) or violet (Model B) border halo
+          const haloColor = modelType === "A" ? "#f59e0b" : "#8b5cf6";
+          ctx.strokeStyle = haloColor;
+          ctx.lineWidth = Math.max(3, 3.5 * (totalScale / baseScale));
+          ctx.strokeRect(x, y, w, h);
 
-        // Label tag
-        const score = Math.round(det.confidence * 100);
-        const labelText = `${det.class_name} ${score}%`;
-        ctx.font = "bold 11px monospace";
-        const textMetrics = ctx.measureText(labelText);
-        const tagH = 16;
-        const tagW = textMetrics.width + 8;
-        const tagY = Math.max(0, y - tagH);
+          // Unique label badge
+          const score = Math.round(det.confidence * 100);
+          const labelText = `[ONLY ${modelType}] ${det.class_name} ${score}%`;
+          ctx.font = "bold 11px monospace";
+          const textMetrics = ctx.measureText(labelText);
+          const tagH = 18;
+          const tagW = textMetrics.width + 10;
+          const tagY = Math.max(0, y - tagH);
 
-        ctx.fillStyle = col.hex;
-        ctx.fillRect(x, tagY, tagW, tagH);
+          ctx.fillStyle = haloColor;
+          ctx.fillRect(x, tagY, tagW, tagH);
 
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(labelText, x + 4, tagY + 12);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(labelText, x + 5, tagY + 13);
+        } else {
+          // Standard bounding box for shared/matched objects
+          ctx.strokeStyle = col.hex;
+          ctx.lineWidth = Math.max(1.5, 2 * (totalScale / baseScale));
+          ctx.strokeRect(x, y, w, h);
+
+          const score = Math.round(det.confidence * 100);
+          const labelText = `${det.class_name} ${score}%`;
+          ctx.font = "bold 11px monospace";
+          const textMetrics = ctx.measureText(labelText);
+          const tagH = 16;
+          const tagW = textMetrics.width + 8;
+          const tagY = Math.max(0, y - tagH);
+
+          ctx.fillStyle = col.hex;
+          ctx.fillRect(x, tagY, tagW, tagH);
+
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(labelText, x + 4, tagY + 12);
+        }
       }
 
       ctx.restore();
     },
-    [imageElement, zoom, pan]
+    [imageElement, zoom, pan, highlightUniques]
   );
 
   // Render loop when in Side-by-side mode
@@ -211,7 +265,14 @@ export const CompareView: React.FC = () => {
       const ctx = c.getContext("2d");
       if (ctx) {
         ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-        drawDetections(ctx, c.clientWidth, c.clientHeight, filteredDetectionsA);
+        drawDetections(
+          ctx,
+          c.clientWidth,
+          c.clientHeight,
+          filteredDetectionsA,
+          onlyASet,
+          "A"
+        );
       }
     }
 
@@ -222,10 +283,25 @@ export const CompareView: React.FC = () => {
       const ctx = c.getContext("2d");
       if (ctx) {
         ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-        drawDetections(ctx, c.clientWidth, c.clientHeight, filteredDetectionsB);
+        drawDetections(
+          ctx,
+          c.clientWidth,
+          c.clientHeight,
+          filteredDetectionsB,
+          onlyBSet,
+          "B"
+        );
       }
     }
-  }, [displayMode, drawDetections, filteredDetectionsA, filteredDetectionsB, imageElement]);
+  }, [
+    displayMode,
+    drawDetections,
+    filteredDetectionsA,
+    filteredDetectionsB,
+    onlyASet,
+    onlyBSet,
+    imageElement,
+  ]);
 
   // Render loop when in Slider mode
   useEffect(() => {
@@ -244,10 +320,26 @@ export const CompareView: React.FC = () => {
     const splitPx = (cw * sliderPos) / 100;
 
     // Draw Model A on left half
-    drawDetections(ctx, cw, ch, filteredDetectionsA, { left: 0, right: splitPx });
+    drawDetections(
+      ctx,
+      cw,
+      ch,
+      filteredDetectionsA,
+      onlyASet,
+      "A",
+      { left: 0, right: splitPx }
+    );
 
     // Draw Model B on right half
-    drawDetections(ctx, cw, ch, filteredDetectionsB, { left: splitPx, right: cw });
+    drawDetections(
+      ctx,
+      cw,
+      ch,
+      filteredDetectionsB,
+      onlyBSet,
+      "B",
+      { left: splitPx, right: cw }
+    );
 
     // Draw vertical divider
     ctx.strokeStyle = "#0070f3";
@@ -258,7 +350,16 @@ export const CompareView: React.FC = () => {
     ctx.lineTo(splitPx, ch);
     ctx.stroke();
     ctx.setLineDash([]);
-  }, [displayMode, sliderPos, drawDetections, filteredDetectionsA, filteredDetectionsB, imageElement]);
+  }, [
+    displayMode,
+    sliderPos,
+    drawDetections,
+    filteredDetectionsA,
+    filteredDetectionsB,
+    onlyASet,
+    onlyBSet,
+    imageElement,
+  ]);
 
   // Synchronized Pan interaction handlers
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -314,7 +415,7 @@ export const CompareView: React.FC = () => {
   }, [isDraggingSlider]);
 
   return (
-    <div className="flex flex-col flex-1 h-full min-h-[500px] gap-4">
+    <div className="flex flex-col flex-1 h-full min-h-[550px] gap-4">
       {/* Top Controls Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card border border-border-subtle rounded-panel">
         {/* Model Selection Cluster */}
@@ -365,6 +466,24 @@ export const CompareView: React.FC = () => {
 
         {/* View Mode & Zoom Controls */}
         <div className="flex items-center gap-2">
+          {/* Highlight Unique Objects Toggle */}
+          <button
+            type="button"
+            onClick={() => setHighlightUniques((h) => !h)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand",
+              highlightUniques
+                ? "bg-brand-subtle text-brand border-brand/30"
+                : "bg-elevated text-text-secondary border-border-subtle hover:text-text-primary"
+            )}
+            title="Highlight detections found by only one model"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Highlight Unique</span>
+          </button>
+
+          <div className="h-4 w-px bg-border-subtle mx-1" />
+
           {/* Display Mode Toggle */}
           <div className="flex items-center rounded-control border border-border-subtle bg-elevated p-0.5">
             <button
@@ -515,6 +634,143 @@ export const CompareView: React.FC = () => {
         </div>
       ) : (
         <div className="flex-1 flex flex-col min-h-0 gap-3">
+          {/* Detailed Comparison Summary Strip */}
+          {compareResult && (
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              {/* Card 1: Model A Summary */}
+              <div className="p-3 bg-card border border-border-subtle rounded-panel flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-brand flex items-center gap-1.5">
+                    <Box className="w-3.5 h-3.5" /> Model A ({modelA})
+                  </span>
+                  <Badge variant="brand" mono>
+                    {filteredDetectionsA.length} objs
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary mt-1">
+                  <span>Mean Score:</span>
+                  <span className="font-mono font-medium text-text-primary">{meanScoreA}%</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Latency:</span>
+                  <span className="font-mono font-medium text-text-primary">
+                    {compareResult.model_a_result.inference_time_ms.toFixed(1)} ms
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Unique Objects:</span>
+                  <span className="font-mono font-medium text-status-warning">
+                    {comparisonMatch.onlyA.length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 2: Model B Summary */}
+              <div className="p-3 bg-card border border-border-subtle rounded-panel flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-text-secondary flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5" /> Model B ({modelB})
+                  </span>
+                  <Badge variant="neutral" mono>
+                    {filteredDetectionsB.length} objs
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary mt-1">
+                  <span>Mean Score:</span>
+                  <span className="font-mono font-medium text-text-primary">{meanScoreB}%</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Latency:</span>
+                  <span className="font-mono font-medium text-text-primary">
+                    {compareResult.model_b_result.inference_time_ms.toFixed(1)} ms
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Unique Objects:</span>
+                  <span className="font-mono font-medium text-purple-400">
+                    {comparisonMatch.onlyB.length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: Matched / Shared Objects */}
+              <div className="p-3 bg-card border border-border-subtle rounded-panel flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-text-secondary flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-status-success" /> Shared Objects
+                  </span>
+                  <Badge variant="success" mono>
+                    {comparisonMatch.matched.length} matched
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary mt-1">
+                  <span>IoU Threshold:</span>
+                  <span className="font-mono font-medium text-text-primary">0.45</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Class-Aware:</span>
+                  <span className="font-mono font-medium text-text-primary">Yes</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Agreement:</span>
+                  <span className="font-mono font-medium text-status-success">
+                    {filteredDetectionsA.length > 0 || filteredDetectionsB.length > 0
+                      ? Math.round(
+                          (comparisonMatch.matched.length /
+                            Math.max(
+                              1,
+                              comparisonMatch.matched.length +
+                                comparisonMatch.onlyA.length +
+                                comparisonMatch.onlyB.length
+                            )) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 4: Parallel Timing Benchmark */}
+              <div className="p-3 bg-card border border-border-subtle rounded-panel flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-text-secondary flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-brand" /> Parallel Run
+                  </span>
+                  <Badge variant="neutral" mono>
+                    {compareResult.total_time_ms.toFixed(1)} ms
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary mt-1">
+                  <span>Serial Sum:</span>
+                  <span className="font-mono font-medium text-text-tertiary">
+                    {(
+                      compareResult.model_a_result.inference_time_ms +
+                      compareResult.model_b_result.inference_time_ms
+                    ).toFixed(1)}{" "}
+                    ms
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Time Saved:</span>
+                  <span className="font-mono font-medium text-status-success">
+                    {Math.max(
+                      0,
+                      compareResult.model_a_result.inference_time_ms +
+                        compareResult.model_b_result.inference_time_ms -
+                        compareResult.total_time_ms
+                    ).toFixed(1)}{" "}
+                    ms
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span>Concurrency:</span>
+                  <span className="font-mono font-medium text-brand">2 Workers</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Canvas Viewport */}
           <div
             className="flex-1 relative overflow-hidden bg-canvas border border-border-subtle rounded-panel select-none touch-none"
@@ -529,12 +785,22 @@ export const CompareView: React.FC = () => {
                 <canvas ref={sliderCanvasRef} className="w-full h-full block" />
 
                 {/* Left/Right Identification Badges */}
-                <div className="absolute top-3 left-3 pointer-events-none">
+                <div className="absolute top-3 left-3 pointer-events-none flex items-center gap-1.5">
                   <Badge variant="brand" mono>
                     Model A: {modelA} ({filteredDetectionsA.length} boxes)
                   </Badge>
+                  {highlightUniques && comparisonMatch.onlyA.length > 0 && (
+                    <Badge variant="warning" mono>
+                      {comparisonMatch.onlyA.length} unique
+                    </Badge>
+                  )}
                 </div>
-                <div className="absolute top-3 right-3 pointer-events-none">
+                <div className="absolute top-3 right-3 pointer-events-none flex items-center gap-1.5">
+                  {highlightUniques && comparisonMatch.onlyB.length > 0 && (
+                    <Badge variant="neutral" mono>
+                      {comparisonMatch.onlyB.length} unique
+                    </Badge>
+                  )}
                   <Badge variant="neutral" mono>
                     Model B: {modelB} ({filteredDetectionsB.length} boxes)
                   </Badge>
@@ -557,18 +823,28 @@ export const CompareView: React.FC = () => {
               <div className="grid grid-cols-2 w-full h-full divide-x divide-border-subtle">
                 <div className="relative w-full h-full">
                   <canvas ref={canvasRefA} className="w-full h-full block" />
-                  <div className="absolute top-3 left-3 pointer-events-none">
+                  <div className="absolute top-3 left-3 pointer-events-none flex items-center gap-1.5">
                     <Badge variant="brand" mono>
                       Model A: {modelA} ({filteredDetectionsA.length} boxes)
                     </Badge>
+                    {highlightUniques && comparisonMatch.onlyA.length > 0 && (
+                      <Badge variant="warning" mono>
+                        {comparisonMatch.onlyA.length} unique
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <div className="relative w-full h-full">
                   <canvas ref={canvasRefB} className="w-full h-full block" />
-                  <div className="absolute top-3 left-3 pointer-events-none">
+                  <div className="absolute top-3 left-3 pointer-events-none flex items-center gap-1.5">
                     <Badge variant="neutral" mono>
                       Model B: {modelB} ({filteredDetectionsB.length} boxes)
                     </Badge>
+                    {highlightUniques && comparisonMatch.onlyB.length > 0 && (
+                      <Badge variant="neutral" mono>
+                        {comparisonMatch.onlyB.length} unique
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -603,24 +879,21 @@ export const CompareView: React.FC = () => {
               </div>
             </div>
 
-            {compareResult && (
-              <div className="flex items-center gap-4 text-xs font-mono text-text-tertiary">
-                <span className="flex items-center gap-1.5">
-                  <Box className="w-3.5 h-3.5 text-brand" />
-                  Model A: {filteredDetectionsA.length} objs ({compareResult.model_a_result.inference_time_ms.toFixed(1)}ms)
-                </span>
-                <span>·</span>
-                <span className="flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-text-secondary" />
-                  Model B: {filteredDetectionsB.length} objs ({compareResult.model_b_result.inference_time_ms.toFixed(1)}ms)
-                </span>
-                <span>·</span>
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  Parallel: {compareResult.total_time_ms.toFixed(1)}ms
-                </span>
-              </div>
-            )}
+            {/* Unique Legend Indicator */}
+            <div className="flex items-center gap-3 text-xs text-text-tertiary">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-status-warning" />
+                <span>Only Model A ({comparisonMatch.onlyA.length})</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />
+                <span>Only Model B ({comparisonMatch.onlyB.length})</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-status-success" />
+                <span>Matched ({comparisonMatch.matched.length})</span>
+              </span>
+            </div>
           </div>
         </div>
       )}

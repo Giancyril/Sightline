@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   Scan,
+  SplitSquareVertical,
   History,
   Cpu,
   Terminal,
@@ -65,6 +66,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         keywords: ["upload", "image", "run", "detect", "inference"],
         action: () => {
           onNavigate("detect");
+          onOpenChange(false);
+        },
+      },
+      {
+        id: "nav-compare",
+        label: "Compare Models",
+        description: "Benchmark two models side-by-side or with split slider",
+        icon: <SplitSquareVertical className="w-4 h-4" />,
+        group: "Navigate",
+        keywords: ["compare", "models", "side-by-side", "slider", "iou", "difference"],
+        action: () => {
+          onNavigate("compare");
           onOpenChange(false);
         },
       },

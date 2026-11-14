@@ -7,6 +7,7 @@ export interface StoredHistoryItem {
   thumbnail: string; // lightweight compressed data URL with boxes pre-drawn
   previewUrl: string; // original blob URL if active in session
   result: DetectionResponse;
+  model_id?: string;
 }
 
 const DB_NAME = "vision_ssd_history_db";
