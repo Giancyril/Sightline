@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import classes, detect, model
+from api.routers import classes, compare, detect, model
 from api.schemas import HealthResponse
 from api.services.detector import get_detector
 
@@ -51,6 +51,7 @@ app.add_middleware(
 
 # Mount endpoints
 app.include_router(detect.router)
+app.include_router(compare.router)
 app.include_router(classes.router)
 app.include_router(model.router)
 

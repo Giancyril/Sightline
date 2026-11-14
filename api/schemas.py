@@ -158,3 +158,17 @@ class ModelsResponse(BaseModel):
     models: list[ModelRegistryItem] = Field(
         ..., description="List of registered model entries"
     )
+
+
+class CompareResponse(BaseModel):
+    """Response payload for POST /v1/compare."""
+
+    model_a_result: DetectionResponse = Field(
+        ..., description="Detection result from model A"
+    )
+    model_b_result: DetectionResponse = Field(
+        ..., description="Detection result from model B"
+    )
+    total_time_ms: float = Field(
+        ..., ge=0.0, description="Total wall-clock latency for parallel inference in ms"
+    )
