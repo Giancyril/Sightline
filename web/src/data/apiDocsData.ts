@@ -55,6 +55,15 @@ export const ENDPOINTS_DATA: EndpointSpec[] = [
         description: "Image payload. Supported formats: JPEG, PNG, WebP. Maximum size: 10 MB.",
       },
       {
+        name: "model",
+        in: "query",
+        type: "string",
+        required: false,
+        default: "fine-tuned",
+        description:
+          "Target model identifier to invoke ('fine-tuned' or 'coco-baseline'). Defaults to 'fine-tuned'.",
+      },
+      {
         name: "confidence_threshold",
         in: "query",
         type: "float",
@@ -304,6 +313,190 @@ print("Service healthy:", res.json())`,
   "status": "ok",
   "model_loaded": true,
   "version": "1.0.0"
+}`,
+  },
+  {
+    id: "models",
+    method: "GET",
+    path: "/v1/models",
+    summary: "List registered models and memory cache status",
+    description:
+      "Returns the complete registry of available object detection models with metadata, input resolutions, evaluation metrics, and active memory residency status.",
+    parameters: [],
+    responseFields: [
+      { field: "models[]", type: "array<object>", description: "Array of registered model metadata entries" },
+      { field: "models[].id", type: "string", description: "Unique model key ('fine-tuned', 'coco-baseline')" },
+      { field: "models[].display_name", type: "string", description: "Human-readable descriptive model name" },
+      { field: "models[].version", type: "string", description: "Semantic version string" },
+      { field: "models[].input_size", type: "array<int>", description: "Required network input size [width, height]" },
+      { field: "models[].is_loaded", type: "boolean", description: "True if model weights are cached in memory" },
+      { field: "models[].metrics", type: "object", description: "Validation performance metrics" },
+    ],
+    errorCodes: [
+      { status: 500, name: "Internal Server Error", description: "Failed to read model registry file" },
+    ],
+    snippets: {
+      curl: `curl -X GET "${API_DOCS_DISPLAY_BASE_URL}/v1/models" \\
+  -H "Accept: application/json"`,
+      js: `const res = await fetch("${API_DOCS_DISPLAY_BASE_URL}/v1/models");
+const data = await res.json();
+console.log(data.models);`,
+      python: `import requests
+
+res = requests.get("${API_DOCS_DISPLAY_BASE_URL}/v1/models")
+models = res.json()["models"]
+for m in models:
+    print(f"{m['id']} ({m['version']}) - loaded: {m['is_loaded']}")`,
+    },
+    exampleResponse: `{
+  "models": [
+    {
+      "id": "fine-tuned",
+      "display_name": "SSD MobileNet V2 (Open Images 20-Class Fine-Tuned)",
+      "version": "v1.0.0",
+      "path": "ml/export/saved_model",
+      "input_size": [300, 300],
+      "class_list": "classes.json",
+      "is_loaded": true,
+      "metrics": {
+        "mAP_all": 0.2644,
+        "mAP_novel_classes": 0.1816,
+        "mAP_coco_shared": 0.3471
+      }
+    },
+    {
+      "id": "coco-baseline",
+      "display_name": "SSD MobileNet V2 (COCO Baseline)",
+      "version": "v1.0.0",
+      "path": "ml/export/saved_model",
+      "input_size": [300, 300],
+      "class_list": "classes.json",
+      "is_loaded": false,
+      "metrics": {
+        "mAP_all": 0.163,
+        "mAP_novel_classes": 0.0,
+        "mAP_coco_shared": 0.326
+      }
+    }
+  ]
+}`,
+  },
+  {
+    id: "compare",
+    method: "POST",
+    path: "/v1/compare",
+    summary: "Parallel dual-model detection & benchmark",
+    description:
+      "Executes parallel inference of two models on a single image concurrently using worker threads. Returns individual model detections, latency timings, and speedup benchmarks.",
+    parameters: [
+      {
+        name: "file",
+        in: "formData",
+        type: "binary",
+        required: true,
+        description: "Image payload. Supported formats: JPEG, PNG, WebP. Maximum size: 10 MB.",
+      },
+      {
+        name: "model_a",
+        in: "query",
+        type: "string",
+        required: false,
+        default: "fine-tuned",
+        description: "First model identifier to evaluate.",
+      },
+      {
+        name: "model_b",
+        in: "query",
+        type: "string",
+        required: false,
+        default: "coco-baseline",
+        description: "Second model identifier to evaluate.",
+      },
+      {
+        name: "confidence_threshold",
+        in: "query",
+        type: "float",
+        required: false,
+        default: "0.25",
+        description: "Confidence cutoff threshold (0.01 to 1.0).",
+      },
+      {
+        name: "nms_iou_threshold",
+        in: "query",
+        type: "float",
+        required: false,
+        default: "0.45",
+        description: "Non-Maximum Suppression IoU threshold (0.01 to 1.0).",
+      },
+    ],
+    responseFields: [
+      { field: "model_a_result", type: "object", description: "Detection response object from Model A" },
+      { field: "model_b_result", type: "object", description: "Detection response object from Model B" },
+      { field: "total_time_ms", type: "float", description: "Parallel dual-model execution wall clock time in ms" },
+    ],
+    errorCodes: [
+      { status: 400, name: "Bad Request", description: "Unrecognized model ID specified or corrupt image payload" },
+      { status: 413, name: "Payload Too Large", description: "Image file exceeds maximum limit of 10 MB" },
+      { status: 415, name: "Unsupported Media Type", description: "File format is not JPEG, PNG, or WebP" },
+      { status: 422, name: "Validation Error", description: "Missing required file parameter or invalid parameter value" },
+    ],
+    snippets: {
+      curl: `curl -X POST "${API_DOCS_DISPLAY_BASE_URL}/v1/compare?model_a=fine-tuned&model_b=coco-baseline" \\
+  -H "Accept: application/json" \\
+  -F "file=@image.jpg"`,
+      js: `const formData = new FormData();
+formData.append("file", imageFile, "photo.jpg");
+
+const url = new URL("${API_DOCS_DISPLAY_BASE_URL}/v1/compare");
+url.searchParams.set("model_a", "fine-tuned");
+url.searchParams.set("model_b", "coco-baseline");
+
+const response = await fetch(url, {
+  method: "POST",
+  body: formData,
+});
+
+const comparison = await response.json();
+console.log(
+  \`Model A (\${comparison.model_a_result.model_id}): \${comparison.model_a_result.total_detections} objs, \` +
+  \`Model B (\${comparison.model_b_result.model_id}): \${comparison.model_b_result.total_detections} objs\`
+);`,
+      python: `import requests
+
+url = "${API_DOCS_DISPLAY_BASE_URL}/v1/compare"
+params = {
+    "model_a": "fine-tuned",
+    "model_b": "coco-baseline",
+    "confidence_threshold": 0.25,
+}
+
+with open("image.jpg", "rb") as f:
+    files = {"file": ("image.jpg", f, "image/jpeg")}
+    res = requests.post(url, params=params, files=files)
+
+data = res.json()
+print(f"Parallel time: {data['total_time_ms']:.1f}ms")
+print(f"Model A detections: {data['model_a_result']['total_detections']}")
+print(f"Model B detections: {data['model_b_result']['total_detections']}")`,
+    },
+    exampleResponse: `{
+  "model_a_result": {
+    "model_name": "SSD MobileNet V2 (Open Images 20-Class Fine-Tuned)",
+    "model_id": "fine-tuned",
+    "model_version": "v1.0.0",
+    "total_detections": 3,
+    "inference_time_ms": 14.5,
+    "detections": []
+  },
+  "model_b_result": {
+    "model_name": "SSD MobileNet V2 (COCO Baseline)",
+    "model_id": "coco-baseline",
+    "model_version": "v1.0.0",
+    "total_detections": 1,
+    "inference_time_ms": 13.9,
+    "detections": []
+  },
+  "total_time_ms": 16.2
 }`,
   },
 ];

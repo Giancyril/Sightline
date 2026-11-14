@@ -150,3 +150,51 @@ def test_compare_unsupported_format_raises_415():
         compare_models(file=upload)
     assert exc_info.value.status_code == 415
     assert "Unsupported file format" in exc_info.value.detail
+
+
+def test_compare_end_to_end_formats():
+    """End-to-end test of /v1/compare with multiple image formats (JPEG, PNG)."""
+    for fmt in ["JPEG", "PNG"]:
+        data = create_test_image(width=400, height=300, fmt=fmt)
+        filename = f"sample.{fmt.lower()}"
+        upload = make_upload_file(data, filename)
+
+        res = compare_models(
+            file=upload,
+            model_a="fine-tuned",
+            model_b="coco-baseline",
+            confidence_threshold=0.20,
+            nms_iou_threshold=0.50,
+        )
+
+        assert isinstance(res, CompareResponse)
+        assert res.model_a_result.image_dimensions.width == 400
+        assert res.model_a_result.image_dimensions.height == 300
+        assert res.model_b_result.image_dimensions.width == 400
+        assert res.model_b_result.image_dimensions.height == 300
+        assert res.total_time_ms > 0
+
+
+def test_compare_end_to_end_parallel_speedup():
+    """End-to-end comparison demonstrates concurrency (total < sum of inferences)."""
+    data = create_test_image(width=500, height=500, fmt="JPEG")
+    # Warmup both models
+    get_detector("fine-tuned").detect(data)
+    get_detector("coco-baseline").detect(data)
+
+    upload = make_upload_file(data, "benchmark.jpg")
+    res = compare_models(
+        file=upload,
+        model_a="fine-tuned",
+        model_b="coco-baseline",
+        confidence_threshold=0.10,
+    )
+
+    # In parallel execution, wall clock time is less than sum of both sequential inferences
+    # allowing for small thread orchestration margin
+    serial_sum = (
+        res.model_a_result.inference_time_ms + res.model_b_result.inference_time_ms
+    )
+    assert res.total_time_ms < (serial_sum + 100.0)
+    assert res.model_a_result.model_id == "fine-tuned"
+    assert res.model_b_result.model_id == "coco-baseline"

@@ -124,6 +124,34 @@ Optimal confidence threshold **0.25** maximises F1 (0.640):
 
 ---
 
+## Model Registry & Comparative Evaluation
+
+Day 1 introduces a multi-model registry architecture and parallel evaluation engine:
+
+### Registered Models (`models/registry.json`)
+
+| Model ID | Display Name | Version | Backbone | mAP@0.5 (All) | Novel mAP | COCO mAP | Memory Load Strategy |
+|---|---|---|---|---|---|---|---|
+| `fine-tuned` (Default) | SSD MobileNet V2 (Open Images 20-Class Fine-Tuned) | v1.0.0 | MobileNet V2 | 0.2644 | 0.1816 | 0.3471 | Lazy load on first request; thread-safe cache |
+| `coco-baseline` | SSD MobileNet V2 (COCO Baseline) | v1.0.0 | MobileNet V2 | 0.1630 | 0.0000 | 0.3260 | Lazy load on first request; thread-safe cache |
+
+### Parallel Dual-Model Inference (`POST /v1/compare`)
+
+- Concurrently executes inference across two models on the same input image using a Python `ThreadPoolExecutor(max_workers=2)`.
+- Eliminates serial execution overhead, reducing dual-model benchmarking latency from $T_A + T_B$ to $\max(T_A, T_B) + \epsilon$.
+- Returns per-model detection lists, confidence scores, bounding boxes, and execution latencies.
+
+### Class-Aware IoU Matching
+
+- Computes spatial overlap between model detections using Intersection over Union (IoU $\ge 0.45$).
+- Partitions predictions into:
+  - **Shared/Matched:** Detected by both models with class agreement and IoU $\ge 0.45$.
+  - **Only Model A:** Unique detections discovered by Model A.
+  - **Only Model B:** Unique detections discovered by Model B.
+- Front-end visualization highlights model disagreements and novel-class detections in real time.
+
+---
+
 ## Limitations
 
 - **Small training set:** Validation set is only 40 images; per-class AP estimates carry high variance, especially for novel classes with fewer than 10 validation examples.
