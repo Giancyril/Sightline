@@ -65,6 +65,12 @@ export interface ModelsResponse {
   models: ModelRegistryItem[];
 }
 
+export interface CompareResponse {
+  model_a_result: DetectionResponse;
+  model_b_result: DetectionResponse;
+  total_time_ms: number;
+}
+
 export interface ClassItem {
   id: number;
   name: string;

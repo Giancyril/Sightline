@@ -20,7 +20,7 @@ import * as RadixDialog from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
 import { useTheme, type Theme } from "../../lib/theme";
 
-export type NavTab = "detect" | "history" | "model" | "api" | "dev";
+export type NavTab = "detect" | "compare" | "history" | "model" | "api" | "dev";
 
 interface CommandItem {
   id: string;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import { DetectView } from "./views/DetectView";
+import { CompareView } from "./views/CompareView";
 import { HistoryView } from "./views/HistoryView";
 import { ModelView } from "./views/ModelView";
 import { ApiDocsView } from "./views/ApiDocsView";
@@ -24,11 +25,14 @@ import type { HistoryRecord } from "./types";
 const isMac =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
+const ENABLE_COMPARE = import.meta.env.VITE_ENABLE_COMPARE === "true";
+
 export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     if (typeof window !== "undefined") {
       const urlTab = new URLSearchParams(window.location.search).get("tab") as NavTab | null;
-      if (urlTab && ["detect", "history", "model", "api", "dev"].includes(urlTab)) {
+      if (urlTab && ["detect", "compare", "history", "model", "api", "dev"].includes(urlTab)) {
+        if (urlTab === "compare" && !ENABLE_COMPARE) return "detect";
         return urlTab;
       }
       if (
@@ -182,6 +186,21 @@ export function App() {
                 Detect
               </button>
 
+              {ENABLE_COMPARE && (
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("compare")}
+                  className={cn(
+                    "relative h-12 flex items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                    activeTab === "compare"
+                      ? "text-text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                      : "text-text-secondary hover:text-text-primary"
+                  )}
+                >
+                  Compare
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => handleTabChange("history")}
@@ -288,6 +307,15 @@ export function App() {
               onSaveHistory={handleSaveHistory}
               initialRecord={activeDetectionRecord}
             />
+          </PageContainer>
+        )}
+        {ENABLE_COMPARE && activeTab === "compare" && (
+          <PageContainer>
+            <PageHeader
+              title="Model Comparison"
+              description="Benchmark two object detection models concurrently with synchronized zoom and pan."
+            />
+            <CompareView />
           </PageContainer>
         )}
         {activeTab === "history" && (
