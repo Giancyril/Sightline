@@ -471,14 +471,13 @@ export const CompareView: React.FC = () => {
             type="button"
             onClick={() => setHighlightUniques((h) => !h)}
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-control border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand",
+              "flex items-center px-2.5 py-1 text-xs font-medium rounded-control transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand",
               highlightUniques
-                ? "bg-brand-subtle text-brand border-brand/30"
-                : "bg-elevated text-text-secondary border-border-subtle hover:text-text-primary"
+                ? "bg-brand-subtle text-brand"
+                : "bg-elevated text-text-secondary hover:text-text-primary"
             )}
             title="Highlight detections found by only one model"
           >
-            <Sparkles className="w-3.5 h-3.5" />
             <span>Highlight Unique</span>
           </button>
 
