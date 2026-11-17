@@ -18,14 +18,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routers import classes, compare, detect, model, video
 from api.schemas import HealthResponse
 from api.services.detector import get_detector
+from api.services.video_jobs import start_cleanup_task
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Warm up the detector model on startup."""
-    # Warmup detector singleton in memory
+    """Warm up the detector model on startup and start background cleanup."""
     get_detector()
-    yield
+    cleanup_task = start_cleanup_task()
+    try:
+        yield
+    finally:
+        cleanup_task.stop()
 
 
 app = FastAPI(

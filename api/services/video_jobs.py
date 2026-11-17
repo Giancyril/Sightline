@@ -148,18 +148,68 @@ class VideoJobStore:
     def purge_expired(self, ttl_s: float = JOB_TTL_S) -> int:
         """Delete jobs older than ttl_s. Returns count of purged jobs."""
         cutoff = time.time() - ttl_s
-        to_delete: list[str] = []
+        to_delete: list[VideoJob] = []
         with self._lock:
-            for jid, job in self._jobs.items():
+            for jid, job in list(self._jobs.items()):
                 if job.created_at < cutoff:
-                    to_delete.append(jid)
-        for jid in to_delete:
-            self.delete(jid)
-            # Clean up temp files
-            job = self.get(jid)
-            if job:
-                _remove_job_files(job)
+                    to_delete.append(job)
+                    self._jobs.pop(jid, None)
+        for job in to_delete:
+            _remove_job_files(job)
         return len(to_delete)
+
+
+class VideoCleanupTask:
+    """Background periodic task that purges expired jobs and their temp files."""
+
+    def __init__(
+        self,
+        store: VideoJobStore | None = None,
+        interval_s: float = 600.0,
+        ttl_s: float = JOB_TTL_S,
+    ) -> None:
+        self.store = store or get_job_store()
+        self.interval_s = interval_s
+        self.ttl_s = ttl_s
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._run,
+            daemon=True,
+            name="video-cleanup-task",
+        )
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self.interval_s):
+            try:
+                self.store.purge_expired(self.ttl_s)
+            except Exception:
+                pass
+
+    def stop(self, timeout: float = 2.0) -> None:
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=timeout)
+
+    def run_once(self) -> int:
+        """Run a single purge pass synchronously."""
+        return self.store.purge_expired(self.ttl_s)
+
+
+def start_cleanup_task(
+    store: VideoJobStore | None = None,
+    interval_s: float = 600.0,
+    ttl_s: float = JOB_TTL_S,
+) -> VideoCleanupTask:
+    task = VideoCleanupTask(store=store, interval_s=interval_s, ttl_s=ttl_s)
+    task.start()
+    return task
 
 
 # -------------------------------------------------------------------------
