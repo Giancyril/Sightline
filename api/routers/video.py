@@ -104,6 +104,19 @@ def upload_video(
     job.total_frames_to_process = max(1, frame_count // frame_stride)
     store.update(job)
 
+    # Start background worker thread
+    import threading  # noqa: PLC0415
+
+    from api.services.video_worker import process_video_job  # noqa: PLC0415
+
+    t = threading.Thread(
+        target=process_video_job,
+        args=(job, store),
+        daemon=True,
+        name=f"video-worker-{job.job_id[:8]}",
+    )
+    t.start()
+
     return {
         "job_id": job.job_id,
         "state": job.state.value,
