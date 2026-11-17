@@ -115,3 +115,37 @@ export interface HistoryRecord {
   thumbnail?: string;
 }
 
+export interface VideoJobStatus {
+  job_id: string;
+  state: "queued" | "running" | "done" | "failed";
+  progress: number;
+  frames_processed: number;
+  total_frames_to_process: number;
+  fps: number;
+  duration_s: number;
+  width: number;
+  height: number;
+  error?: string | null;
+  created_at?: number;
+  updated_at?: number;
+  has_results: boolean;
+  results?: {
+    annotated_video: string;
+    tracks_csv: string;
+    summary_json: string;
+  };
+}
+
+export interface VideoUploadResponse {
+  job_id: string;
+  state: string;
+  fps: number;
+  duration_s: number;
+  frame_count: number;
+  total_frames_to_process: number;
+  width: number;
+  height: number;
+  mime_type: string;
+  file_size_bytes: number;
+}
+

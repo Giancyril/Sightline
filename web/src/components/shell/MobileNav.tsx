@@ -1,5 +1,5 @@
 import React from "react";
-import { Menu, Scan, SplitSquareVertical, History, Cpu, Terminal, Palette } from "lucide-react";
+import { Menu, Scan, SplitSquareVertical, Video, History, Cpu, Terminal, Palette } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -32,6 +32,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({
       id: "compare",
       label: "Compare",
       icon: <SplitSquareVertical className="w-4 h-4" />,
+    },
+    {
+      id: "video",
+      label: "Video",
+      icon: <Video className="w-4 h-4" />,
     },
     {
       id: "history",

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import { DetectView } from "./views/DetectView";
 import { CompareView } from "./views/CompareView";
+import { VideoView } from "./views/VideoView";
 import { HistoryView } from "./views/HistoryView";
 import { ModelView } from "./views/ModelView";
 import { ApiDocsView } from "./views/ApiDocsView";
@@ -29,7 +30,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     if (typeof window !== "undefined") {
       const urlTab = new URLSearchParams(window.location.search).get("tab") as NavTab | null;
-      if (urlTab && ["detect", "compare", "history", "model", "api", "dev"].includes(urlTab)) {
+      if (urlTab && ["detect", "compare", "video", "history", "model", "api", "dev"].includes(urlTab)) {
         return urlTab;
       }
       if (
@@ -198,6 +199,19 @@ export function App() {
 
               <button
                 type="button"
+                onClick={() => handleTabChange("video")}
+                className={cn(
+                  "relative h-12 flex items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                  activeTab === "video"
+                    ? "text-text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
+              >
+                Video
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleTabChange("history")}
                 className={cn(
                   "relative h-12 flex items-center gap-1.5 px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
@@ -311,6 +325,15 @@ export function App() {
               description="Benchmark two object detection models concurrently with synchronized zoom and pan."
             />
             <CompareView />
+          </PageContainer>
+        )}
+        {activeTab === "video" && (
+          <PageContainer>
+            <PageHeader
+              title="Video Analysis"
+              description="Upload MP4 or WebM clips for per-frame detection, multi-object tracking, and directional counting line analytics."
+            />
+            <VideoView />
           </PageContainer>
         )}
         {activeTab === "history" && (

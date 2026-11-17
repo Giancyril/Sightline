@@ -16,12 +16,13 @@ import {
   HelpCircle,
   XCircle,
   Download,
+  Video,
 } from "lucide-react";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
 import { useTheme, type Theme } from "../../lib/theme";
 
-export type NavTab = "detect" | "compare" | "history" | "model" | "api" | "dev";
+export type NavTab = "detect" | "compare" | "video" | "history" | "model" | "api" | "dev";
 
 interface CommandItem {
   id: string;
@@ -78,6 +79,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         keywords: ["compare", "models", "side-by-side", "slider", "iou", "difference"],
         action: () => {
           onNavigate("compare");
+          onOpenChange(false);
+        },
+      },
+      {
+        id: "nav-video",
+        label: "Video Analysis",
+        description: "Video detection, object tracking and counting line analytics",
+        icon: <Video className="w-4 h-4" />,
+        group: "Navigate",
+        keywords: ["video", "track", "tracking", "counting", "mp4", "webm", "motion"],
+        action: () => {
+          onNavigate("video");
           onOpenChange(false);
         },
       },

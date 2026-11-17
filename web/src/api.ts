@@ -1,4 +1,12 @@
-import type { ClassesResponse, CompareResponse, DetectionResponse, ModelInfoResponse, ModelsResponse } from "./types";
+import type {
+  ClassesResponse,
+  CompareResponse,
+  DetectionResponse,
+  ModelInfoResponse,
+  ModelsResponse,
+  VideoJobStatus,
+  VideoUploadResponse,
+} from "./types";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export const API_DOCS_DISPLAY_BASE_URL =
@@ -116,5 +124,84 @@ export async function compareModels(
   }
 
   return response.json();
+}
+
+export async function uploadVideo(
+  file: File,
+  options?: {
+    model?: string;
+    frameStride?: number;
+    confidenceThreshold?: number;
+    nmsIouThreshold?: number;
+  }
+): Promise<VideoUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+
+  const url = new URL(`${API_BASE_URL}/v1/video`);
+  if (options?.model) url.searchParams.set("model", options.model);
+  if (options?.frameStride) {
+    url.searchParams.set("frame_stride", options.frameStride.toString());
+  }
+  if (options?.confidenceThreshold !== undefined) {
+    url.searchParams.set(
+      "confidence_threshold",
+      options.confidenceThreshold.toString()
+    );
+  }
+  if (options?.nmsIouThreshold !== undefined) {
+    url.searchParams.set(
+      "nms_iou_threshold",
+      options.nmsIouThreshold.toString()
+    );
+  }
+
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let errorDetail = `Upload failed with status ${response.status}`;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) {
+        errorDetail = errJson.detail;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errorDetail);
+  }
+
+  return response.json();
+}
+
+export async function fetchVideoJobStatus(
+  jobId: string
+): Promise<VideoJobStatus> {
+  const response = await fetch(`${API_BASE_URL}/v1/video/${jobId}`);
+  if (!response.ok) {
+    let errorDetail = `Failed to get job status: ${response.statusText}`;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) {
+        errorDetail = errJson.detail;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errorDetail);
+  }
+  return response.json();
+}
+
+export async function cancelVideoJob(jobId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/v1/video/${jobId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to cancel job: ${response.statusText}`);
+  }
 }
 
