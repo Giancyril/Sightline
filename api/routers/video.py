@@ -38,6 +38,10 @@ def upload_video(
     ),
     confidence_threshold: float = Query(default=0.25, ge=0.01, le=1.0),
     nms_iou_threshold: float = Query(default=0.45, ge=0.01, le=1.0),
+    line_p1_x: float | None = Query(default=None, ge=0.0, le=1.0),
+    line_p1_y: float | None = Query(default=None, ge=0.0, le=1.0),
+    line_p2_x: float | None = Query(default=None, ge=0.0, le=1.0),
+    line_p2_y: float | None = Query(default=None, ge=0.0, le=1.0),
 ) -> dict[str, Any]:
     """
     Upload an MP4 or WebM clip (max 50 MB, max 30 s) and queue a detection+tracking job.
@@ -102,6 +106,17 @@ def upload_video(
     job.confidence_threshold = confidence_threshold
     job.nms_iou_threshold = nms_iou_threshold
     job.total_frames_to_process = max(1, frame_count // frame_stride)
+    # Set counting line if all four coords provided
+    if (
+        line_p1_x is not None
+        and line_p1_y is not None
+        and line_p2_x is not None
+        and line_p2_y is not None
+    ):
+        job.counting_line = [
+            {"x": line_p1_x, "y": line_p1_y},
+            {"x": line_p2_x, "y": line_p2_y},
+        ]
     store.update(job)
 
     # Start background worker thread

@@ -5,6 +5,7 @@ import type {
   ModelInfoResponse,
   ModelsResponse,
   VideoJobStatus,
+  VideoSummary,
   VideoUploadResponse,
 } from "./types";
 
@@ -133,6 +134,10 @@ export async function uploadVideo(
     frameStride?: number;
     confidenceThreshold?: number;
     nmsIouThreshold?: number;
+    countingLine?: {
+      p1: { x: number; y: number };
+      p2: { x: number; y: number };
+    };
   }
 ): Promise<VideoUploadResponse> {
   const formData = new FormData();
@@ -154,6 +159,13 @@ export async function uploadVideo(
       "nms_iou_threshold",
       options.nmsIouThreshold.toString()
     );
+  }
+  if (options?.countingLine) {
+    const cl = options.countingLine;
+    url.searchParams.set("line_p1_x", cl.p1.x.toString());
+    url.searchParams.set("line_p1_y", cl.p1.y.toString());
+    url.searchParams.set("line_p2_x", cl.p2.x.toString());
+    url.searchParams.set("line_p2_y", cl.p2.y.toString());
   }
 
   const response = await fetch(url.toString(), {
@@ -203,5 +215,15 @@ export async function cancelVideoJob(jobId: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`Failed to cancel job: ${response.statusText}`);
   }
+}
+
+export async function fetchVideoSummary(
+  jobId: string
+): Promise<VideoSummary> {
+  const response = await fetch(`${API_BASE_URL}/v1/video/${jobId}/summary`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch summary: ${response.statusText}`);
+  }
+  return response.json();
 }
 

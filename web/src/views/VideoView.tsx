@@ -11,12 +11,17 @@ import {
   Download,
   FileText,
   Sliders,
+  TrendingUp,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  BarChart2,
 } from "lucide-react";
 import {
   uploadVideo,
   fetchVideoJobStatus,
   cancelVideoJob,
   fetchModels,
+  fetchVideoSummary,
   API_BASE_URL,
 } from "../api";
 import { Button } from "../components/ui/Button";
@@ -24,7 +29,7 @@ import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Slider } from "../components/ui/Slider";
 import { cn } from "../lib/utils";
-import type { ModelRegistryItem, VideoJobStatus } from "../types";
+import type { ModelRegistryItem, VideoJobStatus, VideoSummary } from "../types";
 
 export const VideoView: React.FC = () => {
   // Config
@@ -34,6 +39,13 @@ export const VideoView: React.FC = () => {
   const [confThreshold, setConfThreshold] = useState<number>(0.25);
   const [nmsThreshold, setNmsThreshold] = useState<number>(0.45);
 
+  // Counting line (normalized 0-1 coords)
+  const [lineEnabled, setLineEnabled] = useState<boolean>(false);
+  const [lineP1, setLineP1] = useState<{ x: number; y: number }>({ x: 0.1, y: 0.5 });
+  const [lineP2, setLineP2] = useState<{ x: number; y: number }>({ x: 0.9, y: 0.5 });
+  const [draggingPoint, setDraggingPoint] = useState<"p1" | "p2" | null>(null);
+  const lineCanvasRef = useRef<HTMLCanvasElement>(null);
+
   // Upload & Job state
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -41,6 +53,7 @@ export const VideoView: React.FC = () => {
   const [job, setJob] = useState<VideoJobStatus | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isCancelled, setIsCancelled] = useState<boolean>(false);
+  const [summary, setSummary] = useState<VideoSummary | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +108,80 @@ export const VideoView: React.FC = () => {
     };
   }, [job]);
 
+  // Fetch summary when job completes
+  useEffect(() => {
+    if (job?.state === "done" && !summary) {
+      fetchVideoSummary(job.job_id)
+        .then((s) => setSummary(s))
+        .catch(() => {
+          // summary is optional; fail silently
+        });
+    }
+  }, [job, summary]);
+
+  // Draw counting line on canvas
+  useEffect(() => {
+    const canvas = lineCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    if (!lineEnabled) return;
+
+    const x1 = lineP1.x * W;
+    const y1 = lineP1.y * H;
+    const x2 = lineP2.x * W;
+    const y2 = lineP2.y * H;
+
+    ctx.strokeStyle = "#6366f1";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw handles
+    for (const [hx, hy] of [[x1, y1], [x2, y2]]) {
+      ctx.fillStyle = "#6366f1";
+      ctx.beginPath();
+      ctx.arc(hx, hy, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }, [lineEnabled, lineP1, lineP2]);
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = lineCanvasRef.current;
+    if (!canvas || !lineEnabled) return;
+    const rect = canvas.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    const dist1 = Math.hypot(nx - lineP1.x, ny - lineP1.y);
+    const dist2 = Math.hypot(nx - lineP2.x, ny - lineP2.y);
+    if (dist1 < 0.08) setDraggingPoint("p1");
+    else if (dist2 < 0.08) setDraggingPoint("p2");
+  }, [lineEnabled, lineP1, lineP2]);
+
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = lineCanvasRef.current;
+    if (!canvas || !draggingPoint) return;
+    const rect = canvas.getBoundingClientRect();
+    const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    if (draggingPoint === "p1") setLineP1({ x: nx, y: ny });
+    else setLineP2({ x: nx, y: ny });
+  }, [draggingPoint]);
+
+  const handleCanvasMouseUp = useCallback(() => {
+    setDraggingPoint(null);
+  }, []);
+
   const handleFileSelect = useCallback((file: File) => {
     setErrorMsg(null);
     setIsCancelled(false);
@@ -122,6 +209,7 @@ export const VideoView: React.FC = () => {
     setIsUploading(true);
     setErrorMsg(null);
     setIsCancelled(false);
+    setSummary(null);
 
     try {
       const uploadRes = await uploadVideo(selectedFile, {
@@ -129,6 +217,9 @@ export const VideoView: React.FC = () => {
         frameStride,
         confidenceThreshold: confThreshold,
         nmsIouThreshold: nmsThreshold,
+        countingLine: lineEnabled
+          ? { p1: lineP1, p2: lineP2 }
+          : undefined,
       });
 
       // Initialize job state from response
@@ -171,6 +262,7 @@ export const VideoView: React.FC = () => {
     setSelectedFile(null);
     setErrorMsg(null);
     setIsCancelled(false);
+    setSummary(null);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -366,6 +458,72 @@ export const VideoView: React.FC = () => {
               </Button>
             </div>
 
+            {/* Annotated video player */}
+            <div className="rounded-control overflow-hidden bg-black border border-border-subtle">
+              <video
+                controls
+                className="w-full max-h-[400px] object-contain"
+                src={`${API_BASE_URL}/v1/video/${job.job_id}/annotated`}
+              >
+                Your browser does not support the video element.
+              </video>
+            </div>
+
+            {/* Summary stats panel */}
+            {summary && (
+              <div className="flex flex-col gap-4">
+                {/* KPI row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-control bg-elevated border border-border-subtle p-3 flex flex-col gap-0.5">
+                    <span className="text-[10px] uppercase tracking-wide text-text-tertiary font-medium">Unique Objects</span>
+                    <span className="text-xl font-bold text-text-primary font-mono">{summary.unique_counts}</span>
+                  </div>
+                  <div className="rounded-control bg-elevated border border-border-subtle p-3 flex flex-col gap-0.5">
+                    <span className="text-[10px] uppercase tracking-wide text-text-tertiary font-medium flex items-center gap-1"><ArrowDownToLine className="w-3 h-3" />Line IN</span>
+                    <span className="text-xl font-bold text-status-success font-mono">{summary.line_counts.total_in}</span>
+                  </div>
+                  <div className="rounded-control bg-elevated border border-border-subtle p-3 flex flex-col gap-0.5">
+                    <span className="text-[10px] uppercase tracking-wide text-text-tertiary font-medium flex items-center gap-1"><ArrowUpFromLine className="w-3 h-3" />Line OUT</span>
+                    <span className="text-xl font-bold text-brand font-mono">{summary.line_counts.total_out}</span>
+                  </div>
+                  <div className="rounded-control bg-elevated border border-border-subtle p-3 flex flex-col gap-0.5">
+                    <span className="text-[10px] uppercase tracking-wide text-text-tertiary font-medium flex items-center gap-1"><TrendingUp className="w-3 h-3" />FPS Processed</span>
+                    <span className="text-xl font-bold text-text-primary font-mono">{summary.fps_processed.toFixed(1)}</span>
+                  </div>
+                </div>
+
+                {/* Counts per class bar chart */}
+                {Object.keys(summary.counts_per_class).length > 0 && (
+                  <div className="rounded-control bg-elevated border border-border-subtle p-4 flex flex-col gap-3">
+                    <h4 className="text-xs font-semibold text-text-secondary flex items-center gap-1.5">
+                      <BarChart2 className="w-3.5 h-3.5 text-brand" />
+                      Unique Objects by Class
+                    </h4>
+                    <div className="flex flex-col gap-2">
+                      {Object.entries(summary.counts_per_class)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([cls, cnt]) => {
+                          const maxVal = Math.max(...Object.values(summary.counts_per_class));
+                          const pct = maxVal > 0 ? (cnt / maxVal) * 100 : 0;
+                          return (
+                            <div key={cls} className="flex items-center gap-2">
+                              <span className="text-[11px] text-text-secondary w-24 truncate shrink-0 capitalize">{cls}</span>
+                              <div className="flex-1 h-2 rounded-full bg-elevated-2 overflow-hidden border border-border-subtle">
+                                <div
+                                  className="h-full bg-brand rounded-full transition-all duration-500"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-mono font-semibold text-text-primary w-6 text-right">{cnt}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Results download action buttons */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <a
@@ -489,6 +647,48 @@ export const VideoView: React.FC = () => {
               onValueChange={(val) => setNmsThreshold(val)}
               disabled={!!job && (job.state === "queued" || job.state === "running")}
             />
+          </div>
+
+          {/* Counting Line Editor */}
+          <div className="border-t border-border-subtle pt-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={lineEnabled}
+                  onChange={(e) => setLineEnabled(e.target.checked)}
+                  disabled={!!job && (job.state === "queued" || job.state === "running")}
+                  className="rounded border-border-subtle text-brand focus:ring-brand"
+                />
+                Counting Line
+              </label>
+              {lineEnabled && (
+                <span className="text-[10px] text-brand font-medium">Active</span>
+              )}
+            </div>
+
+            {lineEnabled && (
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] text-text-tertiary">
+                  Drag the two blue handles to place a directional counting tripwire across the frame.
+                </p>
+                <div className="relative rounded-control overflow-hidden border border-border-subtle bg-elevated aspect-[4/3] flex items-center justify-center">
+                  <canvas
+                    ref={lineCanvasRef}
+                    width={280}
+                    height={210}
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                    className="w-full h-full cursor-crosshair"
+                  />
+                  <div className="absolute bottom-1 right-2 text-[10px] font-mono text-text-tertiary pointer-events-none">
+                    P1: ({lineP1.x.toFixed(2)}, {lineP1.y.toFixed(2)}) | P2: ({lineP2.x.toFixed(2)}, {lineP2.y.toFixed(2)})
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

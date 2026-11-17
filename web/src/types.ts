@@ -149,3 +149,19 @@ export interface VideoUploadResponse {
   file_size_bytes: number;
 }
 
+export interface VideoSummary {
+  job_id: string;
+  unique_counts: number;
+  counts_per_class: Record<string, number>;
+  line_counts: {
+    total_in: number;
+    total_out: number;
+    total_crossings: number;
+    by_class: Record<string, { in: number; out: number }>;
+    line: { p1: { x: number; y: number }; p2: { x: number; y: number } };
+  };
+  fps_processed: number;
+  total_frames_processed: number;
+  duration_s: number;
+}
+
