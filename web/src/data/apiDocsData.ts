@@ -499,5 +499,255 @@ print(f"Model B detections: {data['model_b_result']['total_detections']}")`,
   "total_time_ms": 16.2
 }`,
   },
+  {
+    id: "video-upload",
+    method: "POST",
+    path: "/v1/video",
+    summary: "Upload video and queue tracking job",
+    description:
+      "Uploads an MP4 or WebM video clip (up to 30s, 50MB) and dispatches a background detection, multi-object tracking, and directional counting worker. Returns a job_id for status polling.",
+    parameters: [
+      {
+        name: "file",
+        in: "formData",
+        type: "binary",
+        required: true,
+        description: "Video payload (MP4 or WebM). Maximum size: 50 MB, maximum length: 30 seconds.",
+      },
+      {
+        name: "model",
+        in: "query",
+        type: "string",
+        required: false,
+        default: "fine-tuned",
+        description: "Detection model ID from the registry to use.",
+      },
+      {
+        name: "frame_stride",
+        in: "query",
+        type: "integer",
+        required: false,
+        default: "3",
+        description: "Process every N-th frame (1 to 30). Higher stride reduces processing latency.",
+      },
+      {
+        name: "confidence_threshold",
+        in: "query",
+        type: "float",
+        required: false,
+        default: "0.25",
+        description: "Confidence cutoff filter (0.01 to 1.0).",
+      },
+      {
+        name: "nms_iou_threshold",
+        in: "query",
+        type: "float",
+        required: false,
+        default: "0.45",
+        description: "Non-Maximum Suppression IoU threshold (0.01 to 1.0).",
+      },
+      {
+        name: "line_p1_x",
+        in: "query",
+        type: "float",
+        required: false,
+        description: "Normalized X coordinate (0.0 to 1.0) of counting line endpoint 1.",
+      },
+      {
+        name: "line_p1_y",
+        in: "query",
+        type: "float",
+        required: false,
+        description: "Normalized Y coordinate (0.0 to 1.0) of counting line endpoint 1.",
+      },
+      {
+        name: "line_p2_x",
+        in: "query",
+        type: "float",
+        required: false,
+        description: "Normalized X coordinate (0.0 to 1.0) of counting line endpoint 2.",
+      },
+      {
+        name: "line_p2_y",
+        in: "query",
+        type: "float",
+        required: false,
+        description: "Normalized Y coordinate (0.0 to 1.0) of counting line endpoint 2.",
+      },
+    ],
+    responseFields: [
+      { field: "job_id", type: "string", description: "Unique UUID tracking the processing job" },
+      { field: "state", type: "string", description: "Initial job state (queued or running)" },
+      { field: "fps", type: "float", description: "Source video frame rate" },
+      { field: "duration_s", type: "float", description: "Duration of video in seconds" },
+      { field: "frame_count", type: "integer", description: "Total video frames detected" },
+      { field: "total_frames_to_process", type: "integer", description: "Number of frames to process given stride" },
+    ],
+    errorCodes: [
+      { status: 413, name: "Payload Too Large", description: "Video exceeds maximum limit of 50 MB" },
+      { status: 415, name: "Unsupported Media Type", description: "File is not a valid MP4 or WebM video" },
+      { status: 422, name: "Unprocessable Entity", description: "Video exceeds 30s limit or cannot be decoded" },
+    ],
+    snippets: {
+      curl: `curl -X POST "${API_DOCS_DISPLAY_BASE_URL}/v1/video?model=fine-tuned&frame_stride=3" \\
+  -H "Accept: application/json" \\
+  -F "file=@traffic.mp4"`,
+      js: `const formData = new FormData();
+formData.append("file", videoFile, "clip.mp4");
+
+const url = new URL("${API_DOCS_DISPLAY_BASE_URL}/v1/video");
+url.searchParams.set("model", "fine-tuned");
+url.searchParams.set("frame_stride", "3");
+
+const res = await fetch(url, { method: "POST", body: formData });
+const { job_id } = await res.json();
+console.log("Queued video job:", job_id);`,
+      python: `import requests
+
+url = "${API_DOCS_DISPLAY_BASE_URL}/v1/video"
+with open("traffic.mp4", "rb") as f:
+    res = requests.post(
+        url,
+        params={"model": "fine-tuned", "frame_stride": 3},
+        files={"file": ("traffic.mp4", f, "video/mp4")},
+    )
+data = res.json()
+print("Job ID:", data["job_id"])`,
+    },
+    exampleResponse: `{
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "state": "running",
+  "fps": 30.0,
+  "duration_s": 12.4,
+  "frame_count": 372,
+  "total_frames_to_process": 124,
+  "width": 1280,
+  "height": 720,
+  "mime_type": "video/mp4",
+  "file_size_bytes": 14205810
+}`,
+  },
+  {
+    id: "video-status",
+    method: "GET",
+    path: "/v1/video/{job_id}",
+    summary: "Check video job status and download links",
+    description:
+      "Polls progress for a queued or running video job, returning frames processed, percentage completion, and artifact download URLs once completed.",
+    parameters: [
+      {
+        name: "job_id",
+        in: "path",
+        type: "string",
+        required: true,
+        description: "UUID of the video processing job.",
+      },
+    ],
+    responseFields: [
+      { field: "job_id", type: "string", description: "Job identifier" },
+      { field: "state", type: "string", description: "Current status: queued | running | done | failed" },
+      { field: "progress", type: "float", description: "Completion fraction from 0.0 to 1.0" },
+      { field: "frames_processed", type: "integer", description: "Frames completed so far" },
+      { field: "total_frames_to_process", type: "integer", description: "Total target frame count" },
+      { field: "results", type: "object", description: "Download URLs for annotated video, tracks CSV, and summary JSON" },
+    ],
+    errorCodes: [
+      { status: 404, name: "Not Found", description: "Job ID not found or expired after 1-hour retention" },
+    ],
+    snippets: {
+      curl: `curl "${API_DOCS_DISPLAY_BASE_URL}/v1/video/a1b2c3d4-e5f6-7890-abcd-ef1234567890"`,
+      js: `const res = await fetch("${API_DOCS_DISPLAY_BASE_URL}/v1/video/" + jobId);
+const status = await res.json();
+console.log(\`Progress: \${Math.round(status.progress * 100)}% (\${status.state})\`);`,
+      python: `import requests
+
+res = requests.get(f"${API_DOCS_DISPLAY_BASE_URL}/v1/video/{job_id}")
+status = res.json()
+print(f"State: {status['state']}, Progress: {status['progress'] * 100:.1f}%")`,
+    },
+    exampleResponse: `{
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "state": "done",
+  "progress": 1.0,
+  "frames_processed": 124,
+  "total_frames_to_process": 124,
+  "fps": 30.0,
+  "duration_s": 12.4,
+  "width": 1280,
+  "height": 720,
+  "has_results": true,
+  "results": {
+    "annotated_video": "/v1/video/a1b2c3d4-e5f6-7890-abcd-ef1234567890/annotated",
+    "tracks_csv": "/v1/video/a1b2c3d4-e5f6-7890-abcd-ef1234567890/tracks",
+    "summary_json": "/v1/video/a1b2c3d4-e5f6-7890-abcd-ef1234567890/summary"
+  }
+}`,
+  },
+  {
+    id: "video-summary",
+    method: "GET",
+    path: "/v1/video/{job_id}/summary",
+    summary: "Download analytics summary JSON",
+    description:
+      "Returns aggregated tracking metrics including unique object counts, per-class counts, directional counting line totals (IN / OUT), and processing throughput.",
+    parameters: [
+      {
+        name: "job_id",
+        in: "path",
+        type: "string",
+        required: true,
+        description: "UUID of completed video processing job.",
+      },
+    ],
+    responseFields: [
+      { field: "job_id", type: "string", description: "Job identifier" },
+      { field: "unique_counts", type: "integer", description: "Total unique object tracks identified" },
+      { field: "counts_per_class", type: "object", description: "Map of class name to unique object count" },
+      { field: "line_counts", type: "object", description: "Directional counting breakdown (total_in, total_out, by_class)" },
+      { field: "fps_processed", type: "float", description: "Inference & tracking throughput in frames per second" },
+    ],
+    errorCodes: [
+      { status: 404, name: "Not Found", description: "Job not found or summary not yet ready" },
+    ],
+    snippets: {
+      curl: `curl "${API_DOCS_DISPLAY_BASE_URL}/v1/video/a1b2c3d4-e5f6-7890-abcd-ef1234567890/summary"`,
+      js: `const res = await fetch("${API_DOCS_DISPLAY_BASE_URL}/v1/video/" + jobId + "/summary");
+const summary = await res.json();
+console.log("Unique objects:", summary.unique_counts);
+console.log("Line crossings IN:", summary.line_counts.total_in);`,
+      python: `import requests
+
+res = requests.get(f"${API_DOCS_DISPLAY_BASE_URL}/v1/video/{job_id}/summary")
+summary = res.json()
+print("Unique objects:", summary["unique_counts"])
+print("Line IN:", summary["line_counts"]["total_in"])
+print("Line OUT:", summary["line_counts"]["total_out"])`,
+    },
+    exampleResponse: `{
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "unique_counts": 14,
+  "counts_per_class": {
+    "car": 10,
+    "person": 3,
+    "bus": 1
+  },
+  "line_counts": {
+    "total_in": 7,
+    "total_out": 4,
+    "total_crossings": 11,
+    "by_class": {
+      "car": { "in": 6, "out": 3 },
+      "person": { "in": 1, "out": 1 }
+    },
+    "line": {
+      "p1": { "x": 0.1, "y": 0.5 },
+      "p2": { "x": 0.9, "y": 0.5 }
+    }
+  },
+  "fps_processed": 28.4,
+  "total_frames_processed": 124,
+  "duration_s": 12.4
+}`,
+  },
 ];
 

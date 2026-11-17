@@ -152,6 +152,32 @@ Day 1 introduces a multi-model registry architecture and parallel evaluation eng
 
 ---
 
+## Video Detection, Tracking & Counting Analytics
+
+Day 2 extends the platform from single-frame static inference to asynchronous video stream processing, multi-object tracking, and directional counting analytics:
+
+### Pipeline Specifications
+
+| Component | Specification | Default | Parameter Range |
+|---|---|---|---|
+| **Video Ingestion** | MP4, WebM containers (magic byte validated) | — | Max 50 MB, Max 30 seconds |
+| **Worker Execution** | Background asynchronous worker thread | Daemon Thread | Per-job UUID, 1-hour auto-expiration |
+| **Sampling Stride** | Inter-frame sampling interval | `frame_stride = 3` | 1 (every frame) to 30 |
+| **Tracker Engine** | IoU matching + Constant Velocity Motion Model | `iou_threshold = 0.3` | Match IoU: 0.1 to 0.9 |
+| **Track Smoothing** | Exponential Moving Average (EMA) bounding box filter | $\alpha = 0.8$ | $0.0 < \alpha \le 1.0$ |
+| **Track Retention** | Maximum missed frames before cemetery archiving | `max_age = 5` frames | Stale cleanup |
+| **Re-entry Window** | Cemetery association window for re-emerging targets | `max_reentry_age = 15` | ID preservation through short occlusions |
+| **Counting Line** | 2D normalized vector tripwire (CCW cross-product test) | Directional IN/OUT | Points $P_1, P_2 \in [0, 1]^2$ |
+
+### Deliverable Artifacts
+
+For each completed job, the backend yields three downloadable assets:
+1. **Annotated MP4 Video:** H.264/MP4V output rendered with persistent Track ID badges, bounding boxes, trajectory trails, and tripwire counters.
+2. **Tracks CSV (`tracks.csv`):** Per-frame granular detection logs (`frame_idx, track_id, class_name, score, ymin, xmin, ymax, xmax`).
+3. **Summary JSON (`summary.json`):** Aggregated metrics including unique object counts, per-class distribution, IN/OUT line totals, and processing FPS.
+
+---
+
 ## Limitations
 
 - **Small training set:** Validation set is only 40 images; per-class AP estimates carry high variance, especially for novel classes with fewer than 10 validation examples.
@@ -160,6 +186,9 @@ Day 1 introduces a multi-model registry architecture and parallel evaluation eng
 - **No depth / orientation:** The model predicts 2D axis-aligned bounding boxes only.
 - **CPU inference:** No GPU optimisation; latency ≥ 100 ms on CPU; not suitable for real-time video at > 10 FPS on a single core without further optimisation (quantisation, pruning).
 - **Class imbalance:** "Person" is heavily over-represented in both training and validation splits, which may inflate its AP.
+- **Video clip length & file size:** Capped at 30 seconds and 50 MB to prevent worker thread memory saturation on CPU hosts.
+- **ID switches on crossing paths:** Pure spatial IoU tracking without deep visual Re-ID embeddings can swap IDs when two targets of the same class closely intersect or occlude for longer than `max_reentry_age` (15 frames).
+- **Fast camera motion:** Sudden pan/tilt camera motion introduces non-object displacement that exceeds the linear constant velocity motion model assumptions.
 
 ---
 

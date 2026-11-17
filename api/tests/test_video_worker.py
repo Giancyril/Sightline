@@ -13,11 +13,13 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import cv2
 import numpy as np
+import pytest
 
 from api.services.video_jobs import JobState, VideoJob, VideoJobStore
 from api.services.video_worker import FrameResult, _parse_detections, process_video_job
+
+cv2 = pytest.importorskip("cv2")
 
 # ---------------------------------------------------------------------------
 # Helpers

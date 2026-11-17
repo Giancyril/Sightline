@@ -17,7 +17,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import cv2
 import numpy as np
 import pytest
 from fastapi import HTTPException
@@ -25,6 +24,8 @@ from fastapi import HTTPException
 from api.routers.video import download_annotated, download_summary, download_tracks
 from api.services.video_jobs import JobState, VideoJobStore
 from api.services.video_worker import process_video_job
+
+cv2 = pytest.importorskip("cv2")
 
 
 def _make_synthetic_clip(path: Path, fps: int = 10, seconds: int = 2) -> int:
