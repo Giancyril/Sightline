@@ -1,13 +1,17 @@
 """ml/utils/__init__.py"""
 
 from ml.utils.bbox import box_area, clip_boxes, iou, nms
+from ml.utils.counting_line import CountingLine, CrossingEvent, Point2D
 from ml.utils.iou_matching import MatchResult, compute_iou, match_detections
 from ml.utils.tracker import DetectionItem, IoUTracker, Track
 
 __all__ = [
+    "CountingLine",
+    "CrossingEvent",
     "DetectionItem",
     "IoUTracker",
     "MatchResult",
+    "Point2D",
     "Track",
     "box_area",
     "clip_boxes",
