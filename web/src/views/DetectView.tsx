@@ -68,6 +68,10 @@ export const DetectView: React.FC<DetectViewProps> = ({
     }
   });
 
+  // Threshold mode + per-class custom overrides
+  const [thresholdMode, setThresholdMode] = useState<"global" | "recommended" | "custom">("global");
+  const [customThresholds, setCustomThresholds] = useState<Record<string, number>>({});
+
   // Accessibility aria-live announcement
   const [announcement, setAnnouncement] = useState<string>("");
 
@@ -78,7 +82,9 @@ export const DetectView: React.FC<DetectViewProps> = ({
   const runDetection = async (
     blob: Blob,
     nms: number = nmsThreshold,
-    modelId: string = selectedModelId
+    modelId: string = selectedModelId,
+    tMode: "global" | "recommended" | "custom" = thresholdMode,
+    tCustom: Record<string, number> = customThresholds
   ) => {
     try {
       setIsDetecting(true);
@@ -87,8 +93,8 @@ export const DetectView: React.FC<DetectViewProps> = ({
       setSelectedIndex(null);
       setHoveredIndex(null);
 
-      // Fetch at baseline 0.05 to allow zero-latency client-side re-filtering
-      const res = await detectImage(blob, 0.05, nms, modelId);
+      // Always fetch at 0.05 so client-side confidence slider works without re-fetching
+      const res = await detectImage(blob, 0.05, nms, modelId, tMode, tCustom);
       setRawResult(res);
 
       const count = res.detections.filter((d) => d.confidence >= confThreshold).length;
@@ -124,6 +130,9 @@ export const DetectView: React.FC<DetectViewProps> = ({
 
   const handleModelChange = (modelId: string) => {
     setSelectedModelId(modelId);
+    // Reset custom thresholds and mode when model changes
+    setThresholdMode("global");
+    setCustomThresholds({});
     try {
       localStorage.setItem("vision_ssd_selected_model", modelId);
     } catch {
@@ -174,6 +183,21 @@ export const DetectView: React.FC<DetectViewProps> = ({
     setNmsThreshold(newNms);
     if (currentBlob) {
       void runDetection(currentBlob, newNms);
+    }
+  };
+
+  const handleThresholdModeChange = (mode: "global" | "recommended" | "custom") => {
+    setThresholdMode(mode);
+    if (currentBlob) {
+      void runDetection(currentBlob, nmsThreshold, selectedModelId, mode, customThresholds);
+    }
+  };
+
+  const handleCustomThresholdsChange = (overrides: Record<string, number>) => {
+    setCustomThresholds(overrides);
+    // Re-run in custom mode so the API applies per-class filtering immediately
+    if (currentBlob) {
+      void runDetection(currentBlob, nmsThreshold, selectedModelId, "custom", overrides);
     }
   };
 
@@ -437,6 +461,10 @@ export const DetectView: React.FC<DetectViewProps> = ({
               isApiOffline={isApiOffline}
               selectedModelId={selectedModelId}
               onModelChange={handleModelChange}
+              thresholdMode={thresholdMode}
+              onThresholdModeChange={handleThresholdModeChange}
+              customThresholds={customThresholds}
+              onCustomThresholdsChange={handleCustomThresholdsChange}
             />
           </div>
         </div>

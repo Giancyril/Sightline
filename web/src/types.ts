@@ -33,6 +33,8 @@ export interface ImageDimensions {
 export interface ThresholdsApplied {
   confidence_threshold: number;
   nms_iou_threshold: number;
+  threshold_mode?: string;
+  calibration_applied?: boolean;
 }
 
 export interface DetectionResponse {
@@ -45,6 +47,34 @@ export interface DetectionResponse {
   image_dimensions: ImageDimensions;
   thresholds_applied: ThresholdsApplied;
   detections: DetectionItem[];
+  threshold_mode?: string;
+  calibration_applied?: boolean;
+}
+
+export interface ClassThresholdResponseItem {
+  class_id: number;
+  class_name: string;
+  threshold: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  precision_raw: number;
+  recall_raw: number;
+  f1_raw: number;
+  num_detections: number;
+  fell_back: boolean;
+  fallback_reason?: string | null;
+}
+
+export interface ModelThresholdsResponse {
+  model_id: string;
+  rule: string;
+  date: string;
+  data_hash: string;
+  global_threshold: number;
+  fallbacks: string[];
+  thresholds: Record<string, number>;
+  per_class: ClassThresholdResponseItem[];
 }
 
 export interface ModelRegistryItem {
