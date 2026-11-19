@@ -26,6 +26,7 @@ import type { ModelInfoResponse, ClassItem } from "../types";
 
 // Lazy-load charts to maintain lean initial bundle size
 const ModelCharts = lazy(() => import("../components/model/ModelCharts"));
+const CalibrationSection = lazy(() => import("../components/model/CalibrationSection"));
 
 function ChartsSkeleton() {
   return (
@@ -54,6 +55,8 @@ export const ModelView: React.FC = () => {
   const [modelCardOpen, setModelCardOpen] = useState(false);
   const [sortField, setSortField] = useState<"id" | "name" | "ap" | "samples">("id");
   const [sortAsc, setSortAsc] = useState(true);
+  // Calibration section: track which model to show calibration for
+  const [calibModelId, setCalibModelId] = useState("fine-tuned");
 
   // Load live API metadata if online, with fallback to verified local evaluation data
   useEffect(() => {
@@ -229,6 +232,46 @@ export const ModelView: React.FC = () => {
         <Suspense fallback={<ChartsSkeleton />}>
           <ModelCharts />
         </Suspense>
+      </section>
+
+      {/* 4. Calibration — reliability diagram + per-class before/after metrics */}
+      <section aria-labelledby="calibration-heading">
+        <div className="rounded-panel border border-border-subtle bg-card p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-subtle">
+            <div>
+              <h3
+                id="calibration-heading"
+                className="text-sm font-semibold text-text-primary"
+              >
+                Calibration &amp; Recommended Thresholds
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                Reliability diagram and per-class precision / recall trade-off at the
+                recommended threshold vs global 0.25
+              </p>
+            </div>
+            {/* Model picker for calibration section */}
+            <div className="flex items-center gap-2">
+              {["fine-tuned", "coco-baseline"].map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setCalibModelId(id)}
+                  className={`px-3 py-1 rounded-control text-xs font-medium border transition-colors ${
+                    calibModelId === id
+                      ? "bg-brand text-white border-brand"
+                      : "bg-card text-text-secondary border-border-subtle hover:border-border-muted hover:text-text-primary"
+                  }`}
+                >
+                  {id === "fine-tuned" ? "Fine-Tuned" : "COCO Baseline"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Suspense fallback={<ChartsSkeleton />}>
+            <CalibrationSection modelId={calibModelId} />
+          </Suspense>
+        </div>
       </section>
 
       {/* 4. Class Taxonomy Explorer */}
