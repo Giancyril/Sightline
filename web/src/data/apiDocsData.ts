@@ -81,6 +81,23 @@ export const ENDPOINTS_DATA: EndpointSpec[] = [
         description:
           "Non-Maximum Suppression (NMS) intersection-over-union threshold (0.01 to 1.0) for deduplicating overlapping boxes.",
       },
+      {
+        name: "threshold_mode",
+        in: "query",
+        type: "string",
+        required: false,
+        default: "global",
+        description:
+          "Threshold strategy: 'global' (default — uses confidence_threshold for all classes, existing behaviour unchanged), 'recommended' (applies per-class thresholds from thresholds.json with calibrated scores), or 'custom' (caller supplies per-class values via custom_thresholds).",
+      },
+      {
+        name: "custom_thresholds",
+        in: "query",
+        type: "string (JSON)",
+        required: false,
+        description:
+          "JSON object mapping class names to thresholds, e.g. {\"Laptop\":0.35,\"Person\":0.28}. Only used when threshold_mode=custom. Classes not listed fall back to confidence_threshold.",
+      },
     ],
     responseFields: [
       { field: "model_name", type: "string", description: "Name of the served detector architecture" },
@@ -89,6 +106,8 @@ export const ENDPOINTS_DATA: EndpointSpec[] = [
       { field: "inference_time_ms", type: "float", description: "Raw neural network forward pass time in milliseconds" },
       { field: "total_time_ms", type: "float", description: "End-to-end pipeline latency including decode and post-processing" },
       { field: "image_dimensions", type: "object", description: "Input width, height, and channel dimensions in pixels" },
+      { field: "threshold_mode", type: "string", description: "Effective threshold mode applied: 'global', 'recommended', or 'custom'" },
+      { field: "calibration_applied", type: "boolean", description: "True if temperature scaling was applied to scores before filtering" },
       { field: "detections[]", type: "array<object>", description: "List of detected objects with class labels, coordinates, and color tokens" },
     ],
     errorCodes: [
@@ -377,6 +396,99 @@ for m in models:
         "mAP_novel_classes": 0.0,
         "mAP_coco_shared": 0.326
       }
+    }
+  ]
+}`,
+  },
+  {
+    id: "model-thresholds",
+    method: "GET",
+    path: "/v1/models/{model_id}/thresholds",
+    summary: "Get per-class thresholds and calibration metrics",
+    description:
+      "Returns the per-class confidence threshold table for a registered model, including precision, recall, and F1 at the recommended threshold versus the global 0.25 baseline. Requires a thresholds.json file next to the model entry. Returns 404 for models without threshold files.",
+    parameters: [
+      {
+        name: "model_id",
+        in: "path",
+        type: "string",
+        required: true,
+        description: "Model identifier (e.g. 'fine-tuned'). Must match a registered model entry.",
+      },
+    ],
+    responseFields: [
+      { field: "model_id", type: "string", description: "Model identifier" },
+      { field: "rule", type: "string", description: "Threshold selection rule used (e.g. 'best_f1')" },
+      { field: "date", type: "string (ISO 8601)", description: "Timestamp of threshold calculation run" },
+      { field: "data_hash", type: "string", description: "SHA-256 hash of the validation manifest used" },
+      { field: "global_threshold", type: "float", description: "Fallback global threshold (0.25)" },
+      { field: "fallbacks", type: "array<string>", description: "Class names that fell back to global threshold" },
+      { field: "thresholds", type: "object", description: "Fast-lookup map: class_name → recommended threshold" },
+      { field: "per_class[]", type: "array<object>", description: "Detailed per-class rows with P/R/F1 at recommended and global thresholds" },
+      { field: "per_class[].threshold", type: "float", description: "Recommended threshold for this class" },
+      { field: "per_class[].precision", type: "float", description: "Precision at recommended threshold" },
+      { field: "per_class[].recall", type: "float", description: "Recall at recommended threshold" },
+      { field: "per_class[].f1", type: "float", description: "F1 score at recommended threshold" },
+      { field: "per_class[].precision_raw", type: "float", description: "Precision at global 0.25 threshold" },
+      { field: "per_class[].recall_raw", type: "float", description: "Recall at global 0.25 threshold" },
+      { field: "per_class[].fell_back", type: "boolean", description: "True if class fell back to global threshold" },
+    ],
+    errorCodes: [
+      { status: 404, name: "Not Found", description: "No thresholds.json found for this model (coco-baseline, or model without calibration)" },
+      { status: 422, name: "Validation Error", description: "Threshold file exists but fails schema or value-range validation" },
+    ],
+    snippets: {
+      curl: `curl -X GET "${API_DOCS_DISPLAY_BASE_URL}/v1/models/fine-tuned/thresholds" \\
+  -H "Accept: application/json"`,
+      js: `const res = await fetch("${API_DOCS_DISPLAY_BASE_URL}/v1/models/fine-tuned/thresholds");
+const data = await res.json();
+// Get the recommended threshold for a specific class
+const laptopThresh = data.thresholds["Laptop"]; // e.g. 0.28
+console.log(\`Laptop threshold: \${laptopThresh}\`);`,
+      python: `import requests
+
+res = requests.get("${API_DOCS_DISPLAY_BASE_URL}/v1/models/fine-tuned/thresholds")
+data = res.json()
+print(f"Rule: {data['rule']}, Global fallback: {data['global_threshold']}")
+for cls in data["per_class"]:
+    delta_p = (cls["precision"] - cls["precision_raw"]) * 100
+    delta_r = (cls["recall"] - cls["recall_raw"]) * 100
+    print(f"{cls['class_name']}: {cls['threshold']:.2f} | ΔP={delta_p:+.1f}pp ΔR={delta_r:+.1f}pp")`,
+    },
+    exampleResponse: `{
+  "model_id": "fine-tuned",
+  "rule": "best_f1",
+  "date": "2026-11-19T00:00:00Z",
+  "global_threshold": 0.25,
+  "fallbacks": ["Helmet", "Wheelchair", "Flashlight", "Stapler", "Wrench"],
+  "thresholds": {
+    "Person": 0.26,
+    "Laptop": 0.28,
+    "Guitar": 0.35
+  },
+  "per_class": [
+    {
+      "class_id": 1,
+      "class_name": "Person",
+      "threshold": 0.26,
+      "precision": 0.72,
+      "recall": 0.68,
+      "f1": 0.6994,
+      "precision_raw": 0.65,
+      "recall_raw": 0.71,
+      "fell_back": false
+    },
+    {
+      "class_id": 13,
+      "class_name": "Helmet",
+      "threshold": 0.25,
+      "precision": 0.60,
+      "recall": 0.60,
+      "f1": 0.60,
+      "precision_raw": 0.60,
+      "recall_raw": 0.60,
+      "fell_back": true,
+      "fallback_reason": "too_few_detections"
     }
   ]
 }`,

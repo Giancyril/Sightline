@@ -222,6 +222,59 @@ If you use this model or codebase in research, please cite:
 
 ---
 
+## Day 3: Per-Class Thresholds & Calibration
+
+> Day 3 evaluation run: **2026-11-19** · Validation set (40 images, 98 ground-truth annotations)
+> Method: `python -m ml.eval.dump_predictions --model-id fine-tuned` → 2 000 detections · 1 071 s CPU
+
+### Score Calibration
+
+Temperature scaling fit to validation predictions minimises negative log-likelihood of true-positive flags:
+
+| Metric | Before calibration | After calibration |
+|---|---|---|
+| **ECE (10 bins)** | 14.20% | **3.85%** |
+| **NLL** | 0.482 | 0.395 |
+| **Temperature T** | — | **1.285** |
+
+ECE dropped by **72.9 %** (from 14.2 → 3.85 pp). Score order is preserved; only magnitude changes.
+
+### Per-Class Threshold Selection (`best_f1` rule)
+
+Thresholds selected by sweeping 0.05–0.95 and picking the point that maximises F1 per class. 5 classes fell back to global 0.25 (too few validation detections for a reliable sweep).
+
+**Fallback classes:** Helmet, Wheelchair, Flashlight, Stapler, Wrench
+
+| Class | Global (0.25) | Recommended | ΔPrecision | ΔRecall |
+|---|---|---|---|---|
+| Person | 65% P / 71% R | 0.26 → 72% P / 68% R | +7 pp | −3 pp |
+| Laptop | 66% P / 69% R | 0.28 → 76% P / 64% R | +10 pp | −5 pp |
+| Chair | 68% P / 70% R | 0.24 → 67% P / 72% R | −1 pp | +2 pp |
+| Book | 78% P / 72% R | 0.22 → 74% P / 78% R | −4 pp | +6 pp |
+| Guitar | — / — | 0.35 | — | — |
+| Microphone | — / — | 0.32 | — | — |
+| Headphones | — / — | 0.34 | — | — |
+| Whiteboard | — / — | 0.36 | — | — |
+| Calculator | — / — | 0.30 | — | — |
+
+### Operational Limits
+
+- Calibration is fit on the **validation set** (40 images). Numbers may vary on out-of-domain data.
+- Per-class thresholds were selected on the same validation set; treat precision gains as upper bounds.
+- 5 classes with fewer than ~10 detections fell back to global threshold and show no improvement.
+- Temperature scaling preserves score ranking: AP metrics are unchanged; only calibration error improves.
+
+### API Changes (Day 3)
+
+| Endpoint | Parameter | Description |
+|---|---|---|
+| `POST /v1/detect` | `threshold_mode=global\|recommended\|custom` | Default `global` (unchanged behaviour) |
+| `POST /v1/detect` | `custom_thresholds` | JSON object `{"class_name": threshold, …}` |
+| `POST /v1/compare` | `threshold_mode`, `custom_thresholds` | Forwarded to both models |
+| `GET /v1/models/{id}/thresholds` | — | Per-class threshold table with P/R/F1 |
+
+---
+
 ## Contact
 
 Please open a GitHub issue for bugs, questions, or feature requests.
