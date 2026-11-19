@@ -64,6 +64,14 @@ class ThresholdsApplied(BaseModel):
 
     confidence_threshold: float = Field(..., description="Minimum detection score")
     nms_iou_threshold: float = Field(..., description="IoU suppression threshold")
+    threshold_mode: str = Field(
+        default="global",
+        description="Threshold mode used: 'global', 'recommended', or 'custom'",
+    )
+    calibration_applied: bool = Field(
+        default=False,
+        description="Whether score calibration (temperature scaling) was applied",
+    )
 
 
 class DetectionResponse(BaseModel):
@@ -72,6 +80,14 @@ class DetectionResponse(BaseModel):
     model_id: str = Field(default="fine-tuned", description="Model registry ID")
     model_name: str = Field(..., description="Model identifier")
     model_version: str = Field(..., description="Model version tag")
+    threshold_mode: str = Field(
+        default="global",
+        description="Threshold selection mode ('global', 'recommended', or 'custom')",
+    )
+    calibration_applied: bool = Field(
+        default=False,
+        description="True if temperature scaling calibration was applied to scores",
+    )
     total_detections: int = Field(..., ge=0, description="Count of detected objects")
     inference_time_ms: float = Field(
         ..., ge=0.0, description="Pure model latency in ms"
@@ -171,4 +187,54 @@ class CompareResponse(BaseModel):
     )
     total_time_ms: float = Field(
         ..., ge=0.0, description="Total wall-clock latency for parallel inference in ms"
+    )
+
+
+class ClassThresholdResponseItem(BaseModel):
+    """Per-class confidence threshold metrics and status."""
+
+    class_id: int = Field(..., description="1-indexed class ID")
+    class_name: str = Field(..., description="Class name")
+    threshold: float = Field(..., description="Selected confidence threshold")
+    precision: float = Field(..., description="Precision at selected threshold")
+    recall: float = Field(..., description="Recall at selected threshold")
+    f1: float = Field(..., description="F1 score at selected threshold")
+    precision_raw: float = Field(
+        default=0.0, description="Precision at global threshold (0.25)"
+    )
+    recall_raw: float = Field(
+        default=0.0, description="Recall at global threshold (0.25)"
+    )
+    f1_raw: float = Field(
+        default=0.0, description="F1 score at global threshold (0.25)"
+    )
+    num_detections: int = Field(
+        default=0, description="Number of validation detections"
+    )
+    fell_back: bool = Field(
+        default=False, description="True if selection fell back to global threshold"
+    )
+    fallback_reason: str | None = Field(
+        default=None, description="Reason for fallback if fell_back is true"
+    )
+
+
+class ModelThresholdsResponse(BaseModel):
+    """Response payload for GET /v1/models/{id}/thresholds."""
+
+    model_id: str = Field(..., description="Unique model identifier")
+    rule: str = Field(..., description="Threshold selection rule (e.g. best_f1)")
+    date: str = Field(..., description="Timestamp of threshold calculation")
+    data_hash: str = Field(..., description="SHA-256 hash of validation manifest")
+    global_threshold: float = Field(
+        ..., description="Default global fallback threshold"
+    )
+    fallbacks: list[str] = Field(
+        default_factory=list, description="Class names that fell back"
+    )
+    thresholds: dict[str, float] = Field(
+        ..., description="Fast lookup mapping of class_name -> threshold"
+    )
+    per_class: list[ClassThresholdResponseItem] = Field(
+        default_factory=list, description="Detailed per-class thresholds and metrics"
     )

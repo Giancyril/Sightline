@@ -10,6 +10,7 @@ and coordinate conversion.
 from __future__ import annotations
 
 import io
+import logging
 import threading
 import time
 from pathlib import Path
@@ -24,6 +25,8 @@ from ml.data.transforms import generate_ssd_anchors
 from ml.models.coco_labels import COCO_CLASSES, map_coco_id_to_subset
 from ml.models.registry import ModelEntry, get_model_entry
 from ml.models.ssd_mobilenet import SSDMobileNetV2, postprocess_ssd_predictions
+
+logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB limit
 ALLOWED_MAGIC_SIGNATURES = [
@@ -60,11 +63,19 @@ class DetectorService:
         model_version: str = "v1.0.0",
         num_classes: int = 21,
         checkpoint_path: str | Path | None = None,
+        model_entry: ModelEntry | None = None,
     ) -> None:
         self.model_id = model_id
         self.model_name = model_name
         self.model_version = model_version
         self.num_classes = num_classes
+        if model_entry is None:
+            try:
+                self.model_entry = get_model_entry(model_id)
+            except Exception:
+                self.model_entry = None
+        else:
+            self.model_entry = model_entry
         self.device = torch.device("cpu")
         self.model = SSDMobileNetV2(num_classes=self.num_classes).to(self.device)
         self.model.eval()
@@ -134,6 +145,8 @@ class DetectorService:
         image_bytes: bytes,
         confidence_threshold: float = 0.25,
         nms_iou_threshold: float = 0.45,
+        threshold_mode: str = "global",
+        custom_thresholds: dict[str, float] | None = None,
     ) -> dict[str, Any]:
         """
         Run object detection on raw image bytes.
@@ -142,6 +155,8 @@ class DetectorService:
             image_bytes: Raw binary image payload.
             confidence_threshold: Minimum prediction score in [0.0, 1.0].
             nms_iou_threshold: Overlap threshold for NMS in [0.0, 1.0].
+            threshold_mode: "global" (default), "recommended", or "custom".
+            custom_thresholds: Optional mapping of class_name to threshold for "custom" mode.
 
         Returns:
             Structured dict matching DetectionResponse schema.
@@ -170,12 +185,51 @@ class DetectorService:
             offsets = pred_offsets.squeeze(0).cpu().numpy()
         inference_ms = (time.perf_counter() - start_inference) * 1000.0
 
+        # Apply calibration if requested and model has calibration parameters
+        calibration_applied = False
+        cal_probs = probs
+        if (
+            threshold_mode == "recommended"
+            and self.model_entry
+            and self.model_entry.calibration
+        ):
+            try:
+                from ml.eval.calibration import apply_calibration
+
+                cal_probs = apply_calibration(
+                    probs, self.model_entry.calibration.temperature
+                )
+                calibration_applied = True
+            except Exception as e:
+                logger.warning("Failed to apply calibration: %s", e)
+
+        # Determine threshold mode and NMS pre-filtering threshold
+        if (
+            threshold_mode == "recommended"
+            and self.model_entry
+            and self.model_entry.thresholds
+        ):
+            applied_mode = "recommended"
+            min_t = min(self.model_entry.thresholds.thresholds.values())
+            candidate_thresh = min(min_t, confidence_threshold)
+        elif threshold_mode == "custom" and custom_thresholds:
+            applied_mode = "custom"
+            min_t = (
+                min(custom_thresholds.values())
+                if custom_thresholds
+                else confidence_threshold
+            )
+            candidate_thresh = min(min_t, confidence_threshold)
+        else:
+            applied_mode = "global"
+            candidate_thresh = confidence_threshold
+
         # 5. Postprocessing (NMS and Decoding)
         raw_detections = postprocess_ssd_predictions(
             offsets=offsets,
-            class_probs=probs,
+            class_probs=cal_probs,
             anchors=self.anchors,
-            confidence_threshold=confidence_threshold,
+            confidence_threshold=candidate_thresh,
             iou_threshold=nms_iou_threshold,
             max_detections=50,
         )
@@ -217,6 +271,23 @@ class DetectorService:
                 c_hex = "#0072B2"
                 c_rgb = [0, 114, 178]
 
+            # Apply per-class threshold filter
+            if (
+                applied_mode == "recommended"
+                and self.model_entry
+                and self.model_entry.thresholds
+            ):
+                effective_thresh = self.model_entry.get_threshold_for_class(
+                    c_name, mode="recommended", global_threshold=confidence_threshold
+                )
+            elif applied_mode == "custom" and custom_thresholds:
+                effective_thresh = custom_thresholds.get(c_name, confidence_threshold)
+            else:
+                effective_thresh = confidence_threshold
+
+            if score < effective_thresh:
+                continue
+
             formatted_detections.append(
                 {
                     "class_id": class_id,
@@ -247,6 +318,8 @@ class DetectorService:
             "model_id": self.model_id,
             "model_name": self.model_name,
             "model_version": self.model_version,
+            "threshold_mode": applied_mode,
+            "calibration_applied": calibration_applied,
             "total_detections": len(formatted_detections),
             "inference_time_ms": round(inference_ms, 2),
             "total_time_ms": round(total_ms, 2),
@@ -258,6 +331,8 @@ class DetectorService:
             "thresholds_applied": {
                 "confidence_threshold": confidence_threshold,
                 "nms_iou_threshold": nms_iou_threshold,
+                "threshold_mode": applied_mode,
+                "calibration_applied": calibration_applied,
             },
             "detections": formatted_detections,
         }
@@ -302,6 +377,7 @@ class ModelCache:
             model_version=entry.version,
             num_classes=81 if entry.id == "coco-baseline" else 21,
             checkpoint_path=checkpoint_path,
+            model_entry=entry,
         )
 
     def is_loaded(self, model_id: str) -> bool:

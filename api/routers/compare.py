@@ -7,6 +7,7 @@ Endpoint for comparing two object detection models in parallel on a single image
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import time
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -55,6 +56,14 @@ def compare_models(
         le=1.0,
         description="Non-Maximum Suppression (NMS) intersection-over-union threshold",
     ),
+    threshold_mode: str = Query(
+        default="global",
+        description="Threshold selection mode: 'global' (default), 'recommended', or 'custom'",
+    ),
+    custom_thresholds: str | None = Query(
+        default=None,
+        description="Optional JSON string mapping class names to thresholds for 'custom' mode",
+    ),
 ) -> CompareResponse:
     """Run parallel inference across two models on the same image."""
     start_total = time.perf_counter()
@@ -73,6 +82,42 @@ def compare_models(
         )
         resolved_a = model_a.default if hasattr(model_a, "default") else str(model_a)
         resolved_b = model_b.default if hasattr(model_b, "default") else str(model_b)
+        mode_val = (
+            threshold_mode.default
+            if hasattr(threshold_mode, "default")
+            else str(threshold_mode)
+        ).lower()
+
+        if mode_val not in ("global", "recommended", "custom"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid threshold_mode '{mode_val}'. Must be 'global', 'recommended', or 'custom'.",
+            )
+
+        parsed_custom: dict[str, float] | None = None
+        if mode_val == "custom":
+            raw_custom = (
+                custom_thresholds.default
+                if hasattr(custom_thresholds, "default")
+                else custom_thresholds
+            )
+            if not raw_custom:
+                raise HTTPException(
+                    status_code=400,
+                    detail="custom_thresholds JSON string is required when threshold_mode is 'custom'.",
+                )
+            try:
+                parsed = json.loads(raw_custom)
+                if not isinstance(parsed, dict):
+                    raise ValueError(
+                        "custom_thresholds must be a JSON object mapping class names to numbers."
+                    )
+                parsed_custom = {str(k): float(v) for k, v in parsed.items()}
+            except Exception as err:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid custom_thresholds: {err}",
+                ) from err
 
         detector_a = get_detector(resolved_a)
         detector_b = get_detector(resolved_b)
@@ -87,12 +132,16 @@ def compare_models(
                 content,
                 conf_thresh,
                 nms_thresh,
+                mode_val,
+                parsed_custom,
             )
             future_b = executor.submit(
                 detector_b.detect,
                 content,
                 conf_thresh,
                 nms_thresh,
+                mode_val,
+                parsed_custom,
             )
             res_a = future_a.result()
             res_b = future_b.result()
@@ -111,6 +160,8 @@ def compare_models(
         ) from e
     except ImageValidationError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
