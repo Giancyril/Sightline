@@ -82,6 +82,7 @@ ml/export/*.tflite
 logs/
 mlruns/
 wandb/
+/ml/eval/dumps/
 
 # Environment and secrets
 .env
