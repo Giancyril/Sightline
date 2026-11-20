@@ -18,6 +18,8 @@ import {
   EyeOff,
   GitCompare,
   Pencil,
+  Crosshair,
+  Trash2,
 } from "lucide-react";
 import type { DetectionItem, NormalizedBBox } from "../../types.ts";
 import { colorForClass } from "../../lib/colors.ts";
@@ -30,6 +32,7 @@ import {
 } from "../../lib/editorReducer.ts";
 import { Tooltip } from "../ui/Tooltip";
 import { cn } from "../../lib/utils";
+import { ClassPicker } from "./ClassPicker.tsx";
 
 export interface DetectionCanvasRef {
   exportAnnotatedPng: () => void;
@@ -211,6 +214,18 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       id: string;
       box_normalized: NormalizedBBox;
     } | null>(null);
+
+    // Draw tool state
+    const [isDrawTool, setIsDrawTool] = useState<boolean>(false);
+    const [drawClassId, setDrawClassId] = useState<number>(1);
+    const isDrawingBoxRef = useRef<boolean>(false);
+    const drawStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [drawingBoxPreview, setDrawingBoxPreview] = useState<NormalizedBBox | null>(null);
+
+    const selectedBox =
+      isEdit && editorState.selectedId
+        ? editorState.present.find((b) => b.id === editorState.selectedId) || null
+        : null;
 
     const toggleEditMode = useCallback(() => {
       const next = !isEdit;
@@ -545,6 +560,23 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         });
       }
 
+      // Draw live drawing preview box
+      if (drawingBoxPreview) {
+        const cls = colorForClass(drawClassId);
+        const pxMin = drawingBoxPreview.xmin * w;
+        const pyMin = drawingBoxPreview.ymin * h;
+        const pbw = (drawingBoxPreview.xmax - drawingBoxPreview.xmin) * w;
+        const pbh = (drawingBoxPreview.ymax - drawingBoxPreview.ymin) * h;
+        ctx.save();
+        ctx.strokeStyle = cls.hex;
+        ctx.lineWidth = 2.5 / scale;
+        ctx.setLineDash([5 / scale, 5 / scale]);
+        ctx.strokeRect(pxMin, pyMin, pbw, pbh);
+        ctx.fillStyle = `rgba(${cls.rgb[0]}, ${cls.rgb[1]}, ${cls.rgb[2]}, 0.25)`;
+        ctx.fillRect(pxMin, pyMin, pbw, pbh);
+        ctx.restore();
+      }
+
       ctx.restore();
 
       // Draw Comparison Split Line & Badges
@@ -566,6 +598,8 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       editorState.present,
       editorState.selectedId,
       dragPreview,
+      drawingBoxPreview,
+      drawClassId,
       selectedIndex,
       hoveredIndex,
       showLabels,
@@ -585,7 +619,7 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       return () => window.removeEventListener("resize", handleResize);
     }, [render]);
 
-    // Keyboard handlers for Esc (cancel drag/deselect), Arrow keys (nudging), and E (toggle edit mode)
+    // Keyboard handlers for Esc, Delete/Backspace, D (draw), Arrow keys, and E (edit mode)
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement | null;
@@ -594,7 +628,12 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         if (isInputField) return;
 
         if (e.key === "Escape") {
-          if (resizingHandleRef.current) {
+          if (isDrawingBoxRef.current) {
+            isDrawingBoxRef.current = false;
+            setDrawingBoxPreview(null);
+          } else if (isDrawTool) {
+            setIsDrawTool(false);
+          } else if (resizingHandleRef.current) {
             resizingHandleRef.current = null;
             setDragPreview(null);
             initialBoxRef.current = null;
@@ -608,6 +647,16 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
             editorDispatch({ type: "SELECT", id: null });
             onSelectDetection(null);
           }
+        } else if (
+          isEdit &&
+          editorState.selectedId &&
+          (e.key === "Delete" || e.key === "Backspace")
+        ) {
+          e.preventDefault();
+          editorDispatch({ type: "DELETE", id: editorState.selectedId });
+          onSelectDetection(null);
+        } else if (isEdit && (e.key === "d" || e.key === "D")) {
+          setIsDrawTool((prev) => !prev);
         } else if (
           isEdit &&
           editorState.selectedId &&
@@ -635,9 +684,15 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
 
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [editorState.selectedId, isEdit, onSelectDetection, toggleEditMode]);
+    }, [
+      editorState.selectedId,
+      isEdit,
+      isDrawTool,
+      onSelectDetection,
+      toggleEditMode,
+    ]);
 
-    // Mouse move: detect hover box & handle box dragging / handle resizing
+    // Mouse move: detect hover box & handle box dragging / handle resizing / draw box
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (isPanning) {
         const nextX = e.clientX - panStart.x;
@@ -663,6 +718,16 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
 
       const normX = imgX / w;
       const normY = imgY / h;
+
+      // Handle active draw new box
+      if (isEdit && isDrawTool && isDrawingBoxRef.current) {
+        const xmin = Math.min(drawStartRef.current.x, normX);
+        const xmax = Math.max(drawStartRef.current.x, normX);
+        const ymin = Math.min(drawStartRef.current.y, normY);
+        const ymax = Math.max(drawStartRef.current.y, normY);
+        setDrawingBoxPreview(clampBBox({ ymin, xmin, ymax, xmax }));
+        return;
+      }
 
       // Handle active resize drag
       if (
@@ -698,11 +763,11 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
 
       // Check if mouse is hovering over any handle of selected box
       if (isEdit && editorState.selectedId) {
-        const selectedBox = editorState.present.find(
+        const selected = editorState.present.find(
           (b) => b.id === editorState.selectedId
         );
-        if (selectedBox) {
-          const handles = getBoxHandles(selectedBox.box_normalized, w, h);
+        if (selected) {
+          const handles = getBoxHandles(selected.box_normalized, w, h);
           const hitRadius = 8 / scale;
           const hit = handles.find(
             (hPos) => Math.hypot(imgX - hPos.x, imgY - hPos.y) <= hitRadius
@@ -745,25 +810,38 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       const normX = imgX / w;
       const normY = imgY / h;
 
+      // Draw tool click starts drawing
+      if (isEdit && isDrawTool && e.button === 0 && !e.shiftKey) {
+        isDrawingBoxRef.current = true;
+        drawStartRef.current = { x: normX, y: normY };
+        setDrawingBoxPreview({
+          ymin: normY,
+          xmin: normX,
+          ymax: normY,
+          xmax: normX,
+        });
+        return;
+      }
+
       if (isEdit && e.button === 0 && !e.shiftKey) {
         // First check if clicked on any handle of the currently selected box
         if (editorState.selectedId) {
-          const selectedBox = editorState.present.find(
+          const selected = editorState.present.find(
             (b) => b.id === editorState.selectedId
           );
-          if (selectedBox) {
-            const handles = getBoxHandles(selectedBox.box_normalized, w, h);
+          if (selected) {
+            const handles = getBoxHandles(selected.box_normalized, w, h);
             const hitRadius = 8 / scale;
             const hit = handles.find(
               (hPos) => Math.hypot(imgX - hPos.x, imgY - hPos.y) <= hitRadius
             );
             if (hit) {
               resizingHandleRef.current = hit.type;
-              initialBoxRef.current = { ...selectedBox.box_normalized };
-              draggingIdRef.current = selectedBox.id;
+              initialBoxRef.current = { ...selected.box_normalized };
+              draggingIdRef.current = selected.id;
               setDragPreview({
-                id: selectedBox.id,
-                box_normalized: selectedBox.box_normalized,
+                id: selected.id,
+                box_normalized: selected.box_normalized,
               });
               return;
             }
@@ -803,6 +881,32 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     };
 
     const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Finalize draw tool
+      if (isEdit && isDrawTool && isDrawingBoxRef.current) {
+        isDrawingBoxRef.current = false;
+        if (drawingBoxPreview) {
+          const bw = drawingBoxPreview.xmax - drawingBoxPreview.xmin;
+          const bh = drawingBoxPreview.ymax - drawingBoxPreview.ymin;
+          if (bw >= 0.01 && bh >= 0.01) {
+            const cls = colorForClass(drawClassId);
+            const newBox: EditorBox = {
+              id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              class_id: drawClassId,
+              class_name: cls.name,
+              confidence: 1.0,
+              box_normalized: drawingBoxPreview,
+              color_hex: cls.hex,
+              color_rgb: cls.rgb,
+              isManual: true,
+            };
+            editorDispatch({ type: "ADD", box: newBox });
+            setIsDrawTool(false);
+          }
+        }
+        setDrawingBoxPreview(null);
+        return;
+      }
+
       // Finalize resize drag
       if (resizingHandleRef.current) {
         resizingHandleRef.current = null;
@@ -858,7 +962,7 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         ref={containerRef}
         role="region"
         aria-label="Object detection workspace canvas"
-        aria-keyshortcuts="Space U B F Esc E ArrowLeft ArrowRight ArrowUp ArrowDown"
+        aria-keyshortcuts="Space U B F Esc E D Delete Backspace ArrowLeft ArrowRight ArrowUp ArrowDown"
         className={cn(
           "relative w-full h-full min-h-[380px] bg-canvas border border-border-subtle rounded-panel overflow-hidden flex items-center justify-center select-none",
           isFullscreen && "fixed inset-0 z-50 rounded-none border-none",
@@ -876,11 +980,17 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
             onHoverDetection(null);
             setHoveredHandle(null);
             setIsPanning(false);
+            if (isDrawingBoxRef.current) {
+              isDrawingBoxRef.current = false;
+              setDrawingBoxPreview(null);
+            }
           }}
           onWheel={handleWheel}
           className={cn(
             "w-full h-full block touch-none",
-            resizingHandleRef.current || hoveredHandle
+            isDrawTool
+              ? "cursor-crosshair"
+              : resizingHandleRef.current || hoveredHandle
               ? hoveredHandle === "nw" || hoveredHandle === "se"
                 ? "cursor-nwse-resize"
                 : hoveredHandle === "ne" || hoveredHandle === "sw"
@@ -909,7 +1019,11 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
             aria-live="polite"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            Edit Mode: 8 resize handles (Shift for ratio) • Arrow keys to nudge (Shift 2%) • Esc to cancel
+            {isDrawTool
+              ? "Drawing Tool Active: Click and drag on image to create box • Esc to cancel"
+              : selectedBox
+              ? `Selected: ${selectedBox.class_name} • Del to delete • Relabel via picker • Drag to move`
+              : "Edit Mode: Click box to select/relabel/delete • D to draw new box • Arrow keys to nudge"}
           </div>
         )}
 
@@ -926,13 +1040,13 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         )}
 
         {/* Floating Toolbar Controls */}
-        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1 bg-card/90 backdrop-blur-md border border-border-subtle rounded-control p-1 shadow-sm">
+        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1 bg-card/90 backdrop-blur-md border border-border-subtle rounded-control p-1 shadow-sm max-w-[calc(100%-24px)] overflow-x-auto">
           <Tooltip content={isEdit ? "Exit edit mode (E / Esc)" : "Edit annotations (E)"}>
             <button
               type="button"
               onClick={toggleEditMode}
               className={cn(
-                "p-1.5 rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                "p-1.5 rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand shrink-0",
                 isEdit
                   ? "text-amber-400 bg-amber-500/20 ring-1 ring-amber-500/50"
                   : "text-text-tertiary hover:text-text-primary hover:bg-elevated"
@@ -943,6 +1057,68 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
               <Pencil className="w-3.5 h-3.5" />
             </button>
           </Tooltip>
+
+          {isEdit && (
+            <>
+              <Tooltip content={isDrawTool ? "Cancel drawing (D / Esc)" : "Draw new box (D)"}>
+                <button
+                  type="button"
+                  onClick={() => setIsDrawTool((v) => !v)}
+                  className={cn(
+                    "p-1.5 rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand shrink-0",
+                    isDrawTool
+                      ? "text-emerald-400 bg-emerald-500/20 ring-1 ring-emerald-500/50"
+                      : "text-text-tertiary hover:text-text-primary hover:bg-elevated"
+                  )}
+                  aria-label="Draw new box"
+                  aria-pressed={isDrawTool}
+                >
+                  <Crosshair className="w-3.5 h-3.5" />
+                </button>
+              </Tooltip>
+
+              {/* Class picker for relabeling selected box or setting draw class */}
+              {selectedBox ? (
+                <div className="flex items-center gap-1 pl-0.5 shrink-0">
+                  <span className="text-[10px] text-text-tertiary hidden sm:inline">Relabel:</span>
+                  <ClassPicker
+                    size="sm"
+                    selectedClassId={selectedBox.class_id}
+                    onSelectClass={(newId, newName) => {
+                      editorDispatch({
+                        type: "RELABEL",
+                        id: selectedBox.id,
+                        class_id: newId,
+                        class_name: newName,
+                      });
+                    }}
+                  />
+                  <Tooltip content="Delete selected box (Del / Backspace)">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        editorDispatch({ type: "DELETE", id: selectedBox.id });
+                        onSelectDetection(null);
+                      }}
+                      className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 shrink-0"
+                      aria-label="Delete selected box"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
+                </div>
+              ) : isDrawTool ? (
+                <div className="flex items-center gap-1 pl-0.5 shrink-0">
+                  <span className="text-[10px] text-text-tertiary hidden sm:inline">Class:</span>
+                  <ClassPicker
+                    size="sm"
+                    selectedClassId={drawClassId}
+                    onSelectClass={(newId) => setDrawClassId(newId)}
+                  />
+                </div>
+              ) : null}
+            </>
+          )}
 
           <div className="h-3.5 w-px bg-border-subtle mx-0.5" />
           <Tooltip content="Zoom in (+)">
