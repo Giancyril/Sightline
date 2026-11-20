@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from ml.data.classes import CLASS_BY_ID, NUM_CLASSES
 
@@ -209,3 +210,64 @@ def read_manifest_csv(csv_path: Path | str) -> list[ImageRecord]:
                 images_dict[img_id].annotations.append(ann)
 
     return list(images_dict.values())
+
+
+def coco_to_image_records(
+    coco_doc: dict[str, Any], split: str = "train"
+) -> list[ImageRecord]:
+    """Convert a COCO-format dictionary into a list of ImageRecords."""
+    categories_by_id = {
+        cat["id"]: cat["name"] for cat in coco_doc.get("categories", [])
+    }
+    records: list[ImageRecord] = []
+
+    annotations_by_image: dict[Any, list[dict[str, Any]]] = {}
+    for ann in coco_doc.get("annotations", []):
+        img_id = ann["image_id"]
+        annotations_by_image.setdefault(img_id, []).append(ann)
+
+    for img in coco_doc.get("images", []):
+        img_id = str(img["id"])
+        w = float(img["width"])
+        h = float(img["height"])
+        file_name = img.get("file_name", f"{img_id}.jpg")
+
+        ann_records: list[AnnotationRecord] = []
+        for ann in annotations_by_image.get(img.get("id"), []):
+            cat_id = ann["category_id"]
+            cat_name = categories_by_id.get(cat_id, "Unknown")
+            bbox = ann["bbox"]  # [xmin, ymin, width, height] in pixels
+            xmin_px, ymin_px, width_px, height_px = bbox
+            ymin_norm = max(0.0, min(1.0, ymin_px / h))
+            xmin_norm = max(0.0, min(1.0, xmin_px / w))
+            ymax_norm = max(0.0, min(1.0, (ymin_px + height_px) / h))
+            xmax_norm = max(0.0, min(1.0, (xmin_px + width_px) / w))
+
+            ann_records.append(
+                AnnotationRecord(
+                    image_id=img_id,
+                    label=cat_name,
+                    label_id=cat_id,
+                    ymin=ymin_norm,
+                    xmin=xmin_norm,
+                    ymax=ymax_norm,
+                    xmax=xmax_norm,
+                    is_group_of=bool(ann.get("is_group_of", False)),
+                    is_occluded=bool(ann.get("is_occluded", False)),
+                    is_truncated=bool(ann.get("is_truncated", False)),
+                    is_depiction=bool(ann.get("is_depiction", False)),
+                )
+            )
+
+        rec = ImageRecord(
+            image_id=img_id,
+            file_path=file_name,
+            width=int(w),
+            height=int(h),
+            split=split,
+            annotations=ann_records,
+        )
+        records.append(rec)
+
+    return records
+

@@ -12,14 +12,16 @@ from __future__ import annotations
 import base64
 import datetime
 import hashlib
+import io
 import json
 import os
 import re
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from api.schemas import CorrectionCreateRequest, CorrectionResponse
 from ml.data.classes import CLASSES
@@ -201,6 +203,53 @@ def create_correction(payload: CorrectionCreateRequest) -> CorrectionResponse:
         total_annotations=len(coco_annotations),
         has_image=has_image,
         coco_path=str(coco_filename),
+    )
+
+
+@router.get(
+    "/corrections/export",
+    summary="Export all corrections as a ZIP archive of COCO JSON files",
+)
+def export_corrections_zip(
+    include_images: bool = True,
+) -> Response:
+    """Bundle all stored corrections in COCO JSON format into a downloadable ZIP archive."""
+    corrections_dir = get_corrections_dir()
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Include all JSON correction files
+        json_files = sorted(corrections_dir.glob("corr_*.json"))
+        for jf in json_files:
+            zf.write(jf, arcname=f"annotations/{jf.name}")
+
+        # Include opted-in images if present and requested
+        images_count = 0
+        if include_images:
+            images_dir = corrections_dir / "images"
+            if images_dir.exists():
+                for img_path in sorted(images_dir.iterdir()):
+                    if img_path.is_file():
+                        zf.write(img_path, arcname=f"images/{img_path.name}")
+                        images_count += 1
+
+        # Include a manifest summary
+        summary = {
+            "exported_at": datetime.datetime.now(datetime.UTC).isoformat(),
+            "total_corrections": len(json_files),
+            "total_images": images_count,
+            "format": "COCO 1.0",
+        }
+        zf.writestr("manifest.json", json.dumps(summary, indent=2))
+
+    zip_bytes = zip_buffer.getvalue()
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="corrections_coco_export.zip"',
+            "Content-Type": "application/zip",
+        },
     )
 
 

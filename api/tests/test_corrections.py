@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import os
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -19,13 +21,19 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api.main import app
-from api.routers.corrections import create_correction, delete_correction, get_correction
+from api.routers.corrections import (
+    create_correction,
+    delete_correction,
+    export_corrections_zip,
+    get_correction,
+)
 from api.schemas import (
     CorrectionAnnotation,
     CorrectionCreateRequest,
     ImageDimensions,
     NormalizedBBox,
 )
+from ml.data.schema import coco_to_image_records, read_manifest_csv, write_manifest_csv
 
 
 @pytest.fixture
@@ -45,6 +53,7 @@ def test_routes_registered():
     """Verify corrections routes are registered in the FastAPI app."""
     paths = list(app.openapi()["paths"].keys())
     assert "/v1/corrections" in paths
+    assert "/v1/corrections/export" in paths
     assert "/v1/corrections/{correction_id}" in paths
 
 
@@ -238,3 +247,105 @@ def test_validation_errors():
     with pytest.raises(HTTPException) as exc_info:
         create_correction(degenerate_req)
     assert exc_info.value.status_code == 422
+
+
+def test_export_corrections_zip_round_trip(tmp_corrections_dir: Path, tmp_path: Path):
+    """Test exporting corrections as ZIP and round-tripping through data pipeline."""
+    # 1. Create two corrections: one with store_image=False, one with store_image=True
+    sha1 = hashlib.sha256(b"image 1").hexdigest()
+    req1 = CorrectionCreateRequest(
+        image_hash=sha1,
+        image_dimensions=ImageDimensions(width=640, height=480, channels=3),
+        corrected_boxes=[
+            CorrectionAnnotation(
+                class_id=1,
+                class_name="Person",
+                box_normalized=NormalizedBBox(ymin=0.1, xmin=0.2, ymax=0.8, xmax=0.9),
+                confidence=1.0,
+            ),
+            CorrectionAnnotation(
+                class_id=3,
+                class_name="Chair",
+                box_normalized=NormalizedBBox(ymin=0.4, xmin=0.4, ymax=0.7, xmax=0.6),
+                confidence=0.88,
+            ),
+        ],
+        store_image=False,
+    )
+    c1 = create_correction(req1)
+
+    dummy_img_bytes = b"opt-in image binary data"
+    b64_img = base64.b64encode(dummy_img_bytes).decode("ascii")
+    sha2 = hashlib.sha256(dummy_img_bytes).hexdigest()
+    req2 = CorrectionCreateRequest(
+        image_hash=sha2,
+        image_dimensions=ImageDimensions(width=1024, height=768, channels=3),
+        corrected_boxes=[
+            CorrectionAnnotation(
+                class_id=2,
+                class_name="Laptop",
+                box_normalized=NormalizedBBox(ymin=0.2, xmin=0.3, ymax=0.5, xmax=0.7),
+                confidence=0.95,
+            )
+        ],
+        store_image=True,
+        image_base64=b64_img,
+    )
+    c2 = create_correction(req2)
+
+    # 2. Call export endpoint
+    export_response = export_corrections_zip(include_images=True)
+    assert export_response.status_code == 200
+    assert "application/zip" in export_response.media_type
+    assert "corrections_coco_export.zip" in export_response.headers.get("Content-Disposition", "")
+
+    # 3. Read ZIP file from memory
+    zip_bytes = export_response.body
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+        namelist = zf.namelist()
+        assert "manifest.json" in namelist
+        assert f"annotations/{c1.id}.json" in namelist
+        assert f"annotations/{c2.id}.json" in namelist
+        assert f"images/{c2.id}.jpg" in namelist
+
+        manifest_data = json.loads(zf.read("manifest.json").decode("utf-8"))
+        assert manifest_data["total_corrections"] == 2
+        assert manifest_data["total_images"] == 1
+        assert manifest_data["format"] == "COCO 1.0"
+
+        # Check raw image content
+        assert zf.read(f"images/{c2.id}.jpg") == dummy_img_bytes
+
+        # 4. Extract and round-trip COCO JSON through ml data pipeline
+        coco_1_doc = json.loads(zf.read(f"annotations/{c1.id}.json").decode("utf-8"))
+        records_1 = coco_to_image_records(coco_1_doc, split="train")
+        assert len(records_1) == 1
+        img_rec = records_1[0]
+        assert img_rec.width == 640
+        assert img_rec.height == 480
+        assert len(img_rec.annotations) == 2
+
+        # Validate geometric bounding box normalization
+        for ann in img_rec.annotations:
+            valid, msg = ann.validate()
+            assert valid, f"Annotation validation failed: {msg}"
+
+        # 5. Manifest CSV round-trip test
+        manifest_csv_path = tmp_path / "corrections_manifest.csv"
+        write_manifest_csv(records_1, manifest_csv_path)
+        assert manifest_csv_path.exists()
+
+        reloaded_records = read_manifest_csv(manifest_csv_path)
+        assert len(reloaded_records) == 1
+        reloaded = reloaded_records[0]
+        assert reloaded.image_id == img_rec.image_id
+        assert reloaded.width == 640
+        assert reloaded.height == 480
+        assert len(reloaded.annotations) == 2
+        assert reloaded.annotations[0].label == "Person"
+        assert reloaded.annotations[0].label_id == 1
+        assert abs(reloaded.annotations[0].ymin - 0.1) < 1e-4
+        assert abs(reloaded.annotations[0].xmin - 0.2) < 1e-4
+        assert reloaded.annotations[1].label == "Chair"
+        assert reloaded.annotations[1].label_id == 3
+
