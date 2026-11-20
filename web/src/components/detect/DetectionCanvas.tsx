@@ -4,6 +4,7 @@ import React, {
   useState,
   useCallback,
   useImperativeHandle,
+  useReducer,
   forwardRef,
 } from "react";
 import {
@@ -16,9 +17,16 @@ import {
   Eye,
   EyeOff,
   GitCompare,
+  Pencil,
 } from "lucide-react";
-import type { DetectionItem } from "../../types";
-import { colorForClass } from "../../lib/colors";
+import type { DetectionItem, NormalizedBBox } from "../../types.ts";
+import { colorForClass } from "../../lib/colors.ts";
+import {
+  editorReducer,
+  createInitialEditorState,
+  moveBox,
+  type EditorBox,
+} from "../../lib/editorReducer.ts";
 import { Tooltip } from "../ui/Tooltip";
 import { cn } from "../../lib/utils";
 
@@ -27,6 +35,7 @@ export interface DetectionCanvasRef {
   toggleLabels: () => void;
   toggleBoxes: () => void;
   resetView: () => void;
+  toggleEditMode: () => void;
 }
 
 interface DetectionCanvasProps {
@@ -38,6 +47,9 @@ interface DetectionCanvasProps {
   onHoverDetection: (index: number | null) => void;
   className?: string;
   enableComparison?: boolean;
+  isEditMode?: boolean;
+  onToggleEditMode?: (editing: boolean) => void;
+  onBoxesChange?: (boxes: EditorBox[]) => void;
 }
 
 export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasProps>(
@@ -51,6 +63,9 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       onHoverDetection,
       className,
       enableComparison = false,
+      isEditMode,
+      onToggleEditMode,
+      onBoxesChange,
     },
     ref
   ) => {
@@ -65,6 +80,61 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     const [showLabels, setShowLabels] = useState<boolean>(true);
     const [showBoxes, setShowBoxes] = useState<boolean>(true);
     const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+    // Edit mode state & reducer
+    const [internalEditMode, setInternalEditMode] = useState<boolean>(false);
+    const isEdit = isEditMode !== undefined ? isEditMode : internalEditMode;
+
+    const [editorState, editorDispatch] = useReducer(
+      editorReducer,
+      createInitialEditorState()
+    );
+
+    const isDraggingBoxRef = useRef<boolean>(false);
+    const dragOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const initialBoxRef = useRef<NormalizedBBox | null>(null);
+    const draggingIdRef = useRef<string | null>(null);
+    const [dragPreview, setDragPreview] = useState<{
+      id: string;
+      box_normalized: NormalizedBBox;
+    } | null>(null);
+
+    const toggleEditMode = useCallback(() => {
+      const next = !isEdit;
+      setInternalEditMode(next);
+      onToggleEditMode?.(next);
+    }, [isEdit, onToggleEditMode]);
+
+    // Synchronize detections into editor state
+    useEffect(() => {
+      const boxes: EditorBox[] = detections.map((det, idx) => ({
+        id: `det-${idx}`,
+        class_id: det.class_id,
+        class_name: det.class_name,
+        confidence: det.confidence,
+        box_normalized: { ...det.box_normalized },
+        color_hex: det.color_hex,
+        color_rgb: det.color_rgb,
+        isManual: false,
+      }));
+      editorDispatch({ type: "INIT", boxes });
+    }, [detections]);
+
+    // Notify parent of boxes changes in edit mode
+    useEffect(() => {
+      if (isEdit) {
+        onBoxesChange?.(editorState.present);
+      }
+    }, [isEdit, editorState.present, onBoxesChange]);
+
+    // Sync selectedIndex from parent to editor state if external
+    useEffect(() => {
+      if (selectedIndex !== null && detections[selectedIndex]) {
+        editorDispatch({ type: "SELECT", id: `det-${selectedIndex}` });
+      } else if (selectedIndex === null && !isEdit) {
+        editorDispatch({ type: "SELECT", id: null });
+      }
+    }, [selectedIndex, detections, isEdit]);
 
     // Model Comparison feature flag & split slider (0 to 100%)
     const [comparisonActive, setComparisonActive] = useState<boolean>(false);
@@ -190,6 +260,7 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         setZoom(1);
         setPan({ x: 0, y: 0 });
       },
+      toggleEditMode,
     }));
 
     // Render loop
@@ -222,16 +293,41 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       ctx.scale(scale, scale);
       ctx.drawImage(image, 0, 0, w, h);
 
+      // Active boxes to render
+      const boxesToRender: Array<{
+        id: string;
+        class_id: number;
+        class_name: string;
+        confidence?: number;
+        box_normalized: NormalizedBBox;
+        isManual?: boolean;
+      }> = isEdit
+        ? editorState.present.map((b) =>
+            dragPreview && dragPreview.id === b.id
+              ? { ...b, box_normalized: dragPreview.box_normalized }
+              : b
+          )
+        : detections.map((d, i) => ({
+            id: `det-${i}`,
+            class_id: d.class_id,
+            class_name: d.class_name,
+            confidence: d.confidence,
+            box_normalized: d.box_normalized,
+            isManual: false,
+          }));
+
       // Draw Detections
       if (showBoxes) {
-        detections.forEach((det, idx) => {
+        boxesToRender.forEach((det, idx) => {
           // If comparison mode is active, only draw on the left side of split
-          if (comparisonActive) {
+          if (comparisonActive && !isEdit) {
             const splitXNorm = splitPos / 100;
             if (det.box_normalized.xmin > splitXNorm) return;
           }
 
-          const isSelected = selectedIndex === idx;
+          const isSelected = isEdit
+            ? editorState.selectedId === det.id
+            : selectedIndex === idx;
           const isHovered = hoveredIndex === idx;
           const isActive = isSelected || isHovered;
 
@@ -245,21 +341,45 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
           const classCol = colorForClass(det.class_id);
           const strokeHex = classCol.hex;
 
-          const lineWidth = (isActive ? 3 : 2) / scale;
+          const lineWidth = (isSelected ? 3.5 : isActive ? 3 : 2) / scale;
           ctx.lineWidth = lineWidth;
           ctx.strokeStyle = strokeHex;
 
           if (isActive) {
-            ctx.fillStyle = `rgba(${classCol.rgb[0]}, ${classCol.rgb[1]}, ${classCol.rgb[2]}, 0.22)`;
+            ctx.fillStyle = `rgba(${classCol.rgb[0]}, ${classCol.rgb[1]}, ${classCol.rgb[2]}, ${
+              isSelected ? 0.3 : 0.2
+            })`;
             ctx.fillRect(xmin, ymin, bw, bh);
           }
 
           ctx.strokeRect(xmin, ymin, bw, bh);
 
+          // Selection indicator dash outline
+          if (isSelected) {
+            ctx.save();
+            ctx.lineWidth = 1.5 / scale;
+            ctx.strokeStyle = "#ffffff";
+            ctx.setLineDash([4 / scale, 4 / scale]);
+            ctx.strokeRect(
+              xmin + 1.5 / scale,
+              ymin + 1.5 / scale,
+              Math.max(1, bw - 3 / scale),
+              Math.max(1, bh - 3 / scale)
+            );
+            ctx.restore();
+          }
+
           // Labels
           if (showLabels) {
-            const scorePercent = `${(det.confidence * 100).toFixed(1)}%`;
-            const labelText = `${det.class_name} ${scorePercent}`;
+            const scorePercent =
+              det.confidence !== undefined
+                ? `${(det.confidence * 100).toFixed(1)}%`
+                : det.isManual
+                ? "Manual"
+                : "";
+            const labelText = scorePercent
+              ? `${det.class_name} ${scorePercent}`
+              : det.class_name;
 
             const targetFontSize = 11;
             const fontPx = targetFontSize / scale;
@@ -290,7 +410,7 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       ctx.restore();
 
       // Draw Comparison Split Line & Badges
-      if (comparisonActive) {
+      if (comparisonActive && !isEdit) {
         const splitX = (cw * splitPos) / 100;
         ctx.strokeStyle = "rgba(0, 112, 243, 0.8)";
         ctx.lineWidth = 2;
@@ -304,6 +424,10 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     }, [
       image,
       detections,
+      isEdit,
+      editorState.present,
+      editorState.selectedId,
+      dragPreview,
       selectedIndex,
       hoveredIndex,
       showLabels,
@@ -323,7 +447,34 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       return () => window.removeEventListener("resize", handleResize);
     }, [render]);
 
-    // Mouse move: detect hover box
+    // Keyboard handlers for Esc (cancel drag/deselect) and E (toggle edit mode)
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null;
+        const isInputField =
+          target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+        if (isInputField) return;
+
+        if (e.key === "Escape") {
+          if (isDraggingBoxRef.current) {
+            isDraggingBoxRef.current = false;
+            setDragPreview(null);
+            initialBoxRef.current = null;
+            draggingIdRef.current = null;
+          } else if (editorState.selectedId) {
+            editorDispatch({ type: "SELECT", id: null });
+            onSelectDetection(null);
+          }
+        } else if (e.key === "e" || e.key === "E") {
+          toggleEditMode();
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [editorState.selectedId, onSelectDetection, toggleEditMode]);
+
+    // Mouse move: detect hover box & handle box dragging
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (isPanning) {
         const nextX = e.clientX - panStart.x;
@@ -350,8 +501,22 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       const normX = imgX / w;
       const normY = imgY / h;
 
-      for (let i = detections.length - 1; i >= 0; i--) {
-        const b = detections[i].box_normalized;
+      if (
+        isEdit &&
+        isDraggingBoxRef.current &&
+        initialBoxRef.current &&
+        draggingIdRef.current
+      ) {
+        const dx = normX - dragOriginRef.current.x;
+        const dy = normY - dragOriginRef.current.y;
+        const moved = moveBox(initialBoxRef.current, dx, dy);
+        setDragPreview({ id: draggingIdRef.current, box_normalized: moved });
+        return;
+      }
+
+      const currentBoxes = isEdit ? editorState.present : detections;
+      for (let i = currentBoxes.length - 1; i >= 0; i--) {
+        const b = currentBoxes[i].box_normalized;
         if (
           normX >= b.xmin &&
           normX <= b.xmax &&
@@ -366,6 +531,43 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     };
 
     const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const container = containerRef.current;
+      if (!container || !image) return;
+
+      const rect = container.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const { scale, ox, oy, w, h } = getTransform();
+      const normX = (mx - ox) / (scale * w);
+      const normY = (my - oy) / (scale * h);
+
+      if (isEdit && e.button === 0 && !e.shiftKey) {
+        // Find clicked box
+        for (let i = editorState.present.length - 1; i >= 0; i--) {
+          const b = editorState.present[i].box_normalized;
+          if (
+            normX >= b.xmin &&
+            normX <= b.xmax &&
+            normY >= b.ymin &&
+            normY <= b.ymax
+          ) {
+            const target = editorState.present[i];
+            editorDispatch({ type: "SELECT", id: target.id });
+            onSelectDetection(i);
+            isDraggingBoxRef.current = true;
+            dragOriginRef.current = { x: normX, y: normY };
+            initialBoxRef.current = { ...target.box_normalized };
+            draggingIdRef.current = target.id;
+            setDragPreview({ id: target.id, box_normalized: target.box_normalized });
+            return;
+          }
+        }
+        // Clicked outside boxes in edit mode -> deselect
+        editorDispatch({ type: "SELECT", id: null });
+        onSelectDetection(null);
+        return;
+      }
+
       if (e.button === 1 || e.shiftKey || hoveredIndex === null) {
         setIsPanning(true);
         setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
@@ -373,9 +575,24 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     };
 
     const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (isDraggingBoxRef.current) {
+        isDraggingBoxRef.current = false;
+        if (dragPreview && initialBoxRef.current && draggingIdRef.current) {
+          const dx = dragPreview.box_normalized.xmin - initialBoxRef.current.xmin;
+          const dy = dragPreview.box_normalized.ymin - initialBoxRef.current.ymin;
+          if (Math.abs(dx) > 0.0001 || Math.abs(dy) > 0.0001) {
+            editorDispatch({ type: "MOVE", id: draggingIdRef.current, dx, dy });
+          }
+        }
+        setDragPreview(null);
+        initialBoxRef.current = null;
+        draggingIdRef.current = null;
+        return;
+      }
+
       if (isPanning) {
         setIsPanning(false);
-      } else if (e.button === 0) {
+      } else if (e.button === 0 && !isEdit) {
         onSelectDetection(hoveredIndex);
       }
     };
@@ -417,8 +634,12 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
           onWheel={handleWheel}
           className={cn(
             "w-full h-full block touch-none",
-            isPanning
+            isPanning || isDraggingBoxRef.current
               ? "cursor-grabbing"
+              : isEdit &&
+                hoveredIndex !== null &&
+                editorState.selectedId === editorState.present[hoveredIndex]?.id
+              ? "cursor-move"
               : hoveredIndex !== null
               ? "cursor-pointer"
               : zoom > 1
@@ -426,6 +647,14 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
               : "cursor-default"
           )}
         />
+
+        {/* Edit Mode Active Banner */}
+        {isEdit && (
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-chip bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-mono font-medium backdrop-blur-md">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            Edit Mode: Click box to select • Drag to move • Esc to cancel
+          </div>
+        )}
 
         {/* Comparison Labels Header Overlay */}
         {comparisonActive && (
@@ -441,6 +670,24 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
 
         {/* Floating Toolbar Controls */}
         <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1 bg-card/90 backdrop-blur-md border border-border-subtle rounded-control p-1 shadow-sm">
+          <Tooltip content={isEdit ? "Exit edit mode (E / Esc)" : "Edit annotations (E)"}>
+            <button
+              type="button"
+              onClick={toggleEditMode}
+              className={cn(
+                "p-1.5 rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                isEdit
+                  ? "text-amber-400 bg-amber-500/20 ring-1 ring-amber-500/50"
+                  : "text-text-tertiary hover:text-text-primary hover:bg-elevated"
+              )}
+              aria-label="Toggle edit mode"
+              aria-pressed={isEdit}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+
+          <div className="h-3.5 w-px bg-border-subtle mx-0.5" />
           <Tooltip content="Zoom in (+)">
             <button
               type="button"
