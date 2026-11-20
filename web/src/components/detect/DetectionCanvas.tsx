@@ -25,6 +25,7 @@ import {
   editorReducer,
   createInitialEditorState,
   moveBox,
+  clampBBox,
   type EditorBox,
 } from "../../lib/editorReducer.ts";
 import { Tooltip } from "../ui/Tooltip";
@@ -36,6 +37,116 @@ export interface DetectionCanvasRef {
   toggleBoxes: () => void;
   resetView: () => void;
   toggleEditMode: () => void;
+}
+
+export type HandleType = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+
+interface HandlePos {
+  type: HandleType;
+  x: number;
+  y: number;
+  cursor: string;
+}
+
+function getBoxHandles(box: NormalizedBBox, w: number, h: number): HandlePos[] {
+  const xmin = box.xmin * w;
+  const xmax = box.xmax * w;
+  const ymin = box.ymin * h;
+  const ymax = box.ymax * h;
+  const xmid = (xmin + xmax) / 2;
+  const ymid = (ymin + ymax) / 2;
+
+  return [
+    { type: "nw", x: xmin, y: ymin, cursor: "nwse-resize" },
+    { type: "n", x: xmid, y: ymin, cursor: "ns-resize" },
+    { type: "ne", x: xmax, y: ymin, cursor: "nesw-resize" },
+    { type: "e", x: xmax, y: ymid, cursor: "ew-resize" },
+    { type: "se", x: xmax, y: ymax, cursor: "nwse-resize" },
+    { type: "s", x: xmid, y: ymax, cursor: "ns-resize" },
+    { type: "sw", x: xmin, y: ymax, cursor: "nesw-resize" },
+    { type: "w", x: xmin, y: ymid, cursor: "ew-resize" },
+  ];
+}
+
+function resizeBoxWithHandle(
+  initial: NormalizedBBox,
+  handle: HandleType,
+  normX: number,
+  normY: number,
+  isShift: boolean
+): NormalizedBBox {
+  let { xmin, ymin, xmax, ymax } = initial;
+  const initialW = initial.xmax - initial.xmin;
+  const initialH = initial.ymax - initial.ymin;
+  const ratio = initialW / Math.max(0.001, initialH);
+
+  if (handle === "nw") {
+    xmin = normX;
+    ymin = normY;
+    if (isShift) {
+      const w = Math.max(0.01, xmax - xmin);
+      ymin = ymax - w / ratio;
+    }
+  } else if (handle === "ne") {
+    xmax = normX;
+    ymin = normY;
+    if (isShift) {
+      const w = Math.max(0.01, xmax - xmin);
+      ymin = ymax - w / ratio;
+    }
+  } else if (handle === "se") {
+    xmax = normX;
+    ymax = normY;
+    if (isShift) {
+      const w = Math.max(0.01, xmax - xmin);
+      ymax = ymin + w / ratio;
+    }
+  } else if (handle === "sw") {
+    xmin = normX;
+    ymax = normY;
+    if (isShift) {
+      const w = Math.max(0.01, xmax - xmin);
+      ymax = ymin + w / ratio;
+    }
+  } else if (handle === "n") {
+    ymin = normY;
+    if (isShift) {
+      const h = Math.max(0.01, ymax - ymin);
+      const newW = h * ratio;
+      const xmid = (initial.xmin + initial.xmax) / 2;
+      xmin = xmid - newW / 2;
+      xmax = xmid + newW / 2;
+    }
+  } else if (handle === "s") {
+    ymax = normY;
+    if (isShift) {
+      const h = Math.max(0.01, ymax - ymin);
+      const newW = h * ratio;
+      const xmid = (initial.xmin + initial.xmax) / 2;
+      xmin = xmid - newW / 2;
+      xmax = xmid + newW / 2;
+    }
+  } else if (handle === "w") {
+    xmin = normX;
+    if (isShift) {
+      const w = Math.max(0.01, xmax - xmin);
+      const newH = w / ratio;
+      const ymid = (initial.ymin + initial.ymax) / 2;
+      ymin = ymid - newH / 2;
+      ymax = ymid + newH / 2;
+    }
+  } else if (handle === "e") {
+    xmax = normX;
+    if (isShift) {
+      const w = Math.max(0.01, xmax - xmin);
+      const newH = w / ratio;
+      const ymid = (initial.ymin + initial.ymax) / 2;
+      ymin = ymid - newH / 2;
+      ymax = ymid + newH / 2;
+    }
+  }
+
+  return clampBBox({ ymin, xmin, ymax, xmax });
 }
 
 interface DetectionCanvasProps {
@@ -91,6 +202,8 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     );
 
     const isDraggingBoxRef = useRef<boolean>(false);
+    const resizingHandleRef = useRef<HandleType | null>(null);
+    const [hoveredHandle, setHoveredHandle] = useState<HandleType | null>(null);
     const dragOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
     const initialBoxRef = useRef<NormalizedBBox | null>(null);
     const draggingIdRef = useRef<string | null>(null);
@@ -369,6 +482,31 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
             ctx.restore();
           }
 
+          // Eight Resize Handles
+          if (isSelected && isEdit) {
+            const handles = getBoxHandles(det.box_normalized, w, h);
+            const handleSize = 7 / scale;
+            ctx.save();
+            handles.forEach((hPos) => {
+              ctx.fillStyle = "#ffffff";
+              ctx.strokeStyle = classCol.hex;
+              ctx.lineWidth = 1.5 / scale;
+              ctx.fillRect(
+                hPos.x - handleSize / 2,
+                hPos.y - handleSize / 2,
+                handleSize,
+                handleSize
+              );
+              ctx.strokeRect(
+                hPos.x - handleSize / 2,
+                hPos.y - handleSize / 2,
+                handleSize,
+                handleSize
+              );
+            });
+            ctx.restore();
+          }
+
           // Labels
           if (showLabels) {
             const scorePercent =
@@ -447,7 +585,7 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       return () => window.removeEventListener("resize", handleResize);
     }, [render]);
 
-    // Keyboard handlers for Esc (cancel drag/deselect) and E (toggle edit mode)
+    // Keyboard handlers for Esc (cancel drag/deselect), Arrow keys (nudging), and E (toggle edit mode)
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement | null;
@@ -456,7 +594,12 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         if (isInputField) return;
 
         if (e.key === "Escape") {
-          if (isDraggingBoxRef.current) {
+          if (resizingHandleRef.current) {
+            resizingHandleRef.current = null;
+            setDragPreview(null);
+            initialBoxRef.current = null;
+            draggingIdRef.current = null;
+          } else if (isDraggingBoxRef.current) {
             isDraggingBoxRef.current = false;
             setDragPreview(null);
             initialBoxRef.current = null;
@@ -465,6 +608,26 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
             editorDispatch({ type: "SELECT", id: null });
             onSelectDetection(null);
           }
+        } else if (
+          isEdit &&
+          editorState.selectedId &&
+          ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
+        ) {
+          e.preventDefault();
+          const step = e.shiftKey ? 0.02 : 0.005;
+          let dx = 0;
+          let dy = 0;
+          if (e.key === "ArrowLeft") dx = -step;
+          if (e.key === "ArrowRight") dx = step;
+          if (e.key === "ArrowUp") dy = -step;
+          if (e.key === "ArrowDown") dy = step;
+
+          editorDispatch({
+            type: "MOVE",
+            id: editorState.selectedId,
+            dx,
+            dy,
+          });
         } else if (e.key === "e" || e.key === "E") {
           toggleEditMode();
         }
@@ -472,9 +635,9 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
 
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [editorState.selectedId, onSelectDetection, toggleEditMode]);
+    }, [editorState.selectedId, isEdit, onSelectDetection, toggleEditMode]);
 
-    // Mouse move: detect hover box & handle box dragging
+    // Mouse move: detect hover box & handle box dragging / handle resizing
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (isPanning) {
         const nextX = e.clientX - panStart.x;
@@ -501,6 +664,25 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       const normX = imgX / w;
       const normY = imgY / h;
 
+      // Handle active resize drag
+      if (
+        isEdit &&
+        resizingHandleRef.current &&
+        initialBoxRef.current &&
+        draggingIdRef.current
+      ) {
+        const resized = resizeBoxWithHandle(
+          initialBoxRef.current,
+          resizingHandleRef.current,
+          normX,
+          normY,
+          e.shiftKey
+        );
+        setDragPreview({ id: draggingIdRef.current, box_normalized: resized });
+        return;
+      }
+
+      // Handle active box move drag
       if (
         isEdit &&
         isDraggingBoxRef.current &&
@@ -513,6 +695,26 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         setDragPreview({ id: draggingIdRef.current, box_normalized: moved });
         return;
       }
+
+      // Check if mouse is hovering over any handle of selected box
+      if (isEdit && editorState.selectedId) {
+        const selectedBox = editorState.present.find(
+          (b) => b.id === editorState.selectedId
+        );
+        if (selectedBox) {
+          const handles = getBoxHandles(selectedBox.box_normalized, w, h);
+          const hitRadius = 8 / scale;
+          const hit = handles.find(
+            (hPos) => Math.hypot(imgX - hPos.x, imgY - hPos.y) <= hitRadius
+          );
+          if (hit) {
+            setHoveredHandle(hit.type);
+            onHoverDetection(null);
+            return;
+          }
+        }
+      }
+      setHoveredHandle(null);
 
       const currentBoxes = isEdit ? editorState.present : detections;
       for (let i = currentBoxes.length - 1; i >= 0; i--) {
@@ -538,11 +740,37 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const { scale, ox, oy, w, h } = getTransform();
-      const normX = (mx - ox) / (scale * w);
-      const normY = (my - oy) / (scale * h);
+      const imgX = (mx - ox) / scale;
+      const imgY = (my - oy) / scale;
+      const normX = imgX / w;
+      const normY = imgY / h;
 
       if (isEdit && e.button === 0 && !e.shiftKey) {
-        // Find clicked box
+        // First check if clicked on any handle of the currently selected box
+        if (editorState.selectedId) {
+          const selectedBox = editorState.present.find(
+            (b) => b.id === editorState.selectedId
+          );
+          if (selectedBox) {
+            const handles = getBoxHandles(selectedBox.box_normalized, w, h);
+            const hitRadius = 8 / scale;
+            const hit = handles.find(
+              (hPos) => Math.hypot(imgX - hPos.x, imgY - hPos.y) <= hitRadius
+            );
+            if (hit) {
+              resizingHandleRef.current = hit.type;
+              initialBoxRef.current = { ...selectedBox.box_normalized };
+              draggingIdRef.current = selectedBox.id;
+              setDragPreview({
+                id: selectedBox.id,
+                box_normalized: selectedBox.box_normalized,
+              });
+              return;
+            }
+          }
+        }
+
+        // Otherwise find clicked box
         for (let i = editorState.present.length - 1; i >= 0; i--) {
           const b = editorState.present[i].box_normalized;
           if (
@@ -575,6 +803,23 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
     };
 
     const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // Finalize resize drag
+      if (resizingHandleRef.current) {
+        resizingHandleRef.current = null;
+        if (dragPreview && draggingIdRef.current) {
+          editorDispatch({
+            type: "RESIZE",
+            id: draggingIdRef.current,
+            box_normalized: dragPreview.box_normalized,
+          });
+        }
+        setDragPreview(null);
+        initialBoxRef.current = null;
+        draggingIdRef.current = null;
+        return;
+      }
+
+      // Finalize move drag
       if (isDraggingBoxRef.current) {
         isDraggingBoxRef.current = false;
         if (dragPreview && initialBoxRef.current && draggingIdRef.current) {
@@ -613,7 +858,7 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         ref={containerRef}
         role="region"
         aria-label="Object detection workspace canvas"
-        aria-keyshortcuts="Space U B F Esc ArrowLeft ArrowRight"
+        aria-keyshortcuts="Space U B F Esc E ArrowLeft ArrowRight ArrowUp ArrowDown"
         className={cn(
           "relative w-full h-full min-h-[380px] bg-canvas border border-border-subtle rounded-panel overflow-hidden flex items-center justify-center select-none",
           isFullscreen && "fixed inset-0 z-50 rounded-none border-none",
@@ -629,12 +874,21 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
           onMouseUp={handleMouseUp}
           onMouseLeave={() => {
             onHoverDetection(null);
+            setHoveredHandle(null);
             setIsPanning(false);
           }}
           onWheel={handleWheel}
           className={cn(
             "w-full h-full block touch-none",
-            isPanning || isDraggingBoxRef.current
+            resizingHandleRef.current || hoveredHandle
+              ? hoveredHandle === "nw" || hoveredHandle === "se"
+                ? "cursor-nwse-resize"
+                : hoveredHandle === "ne" || hoveredHandle === "sw"
+                ? "cursor-nesw-resize"
+                : hoveredHandle === "n" || hoveredHandle === "s"
+                ? "cursor-ns-resize"
+                : "cursor-ew-resize"
+              : isPanning || isDraggingBoxRef.current
               ? "cursor-grabbing"
               : isEdit &&
                 hoveredIndex !== null &&
@@ -650,9 +904,12 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
 
         {/* Edit Mode Active Banner */}
         {isEdit && (
-          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-chip bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-mono font-medium backdrop-blur-md">
+          <div
+            className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-chip bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-mono font-medium backdrop-blur-md"
+            aria-live="polite"
+          >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            Edit Mode: Click box to select • Drag to move • Esc to cancel
+            Edit Mode: 8 resize handles (Shift for ratio) • Arrow keys to nudge (Shift 2%) • Esc to cancel
           </div>
         )}
 
