@@ -34,6 +34,17 @@ const SHORTCUT_GROUPS = [
       { key: "⌘K / Ctrl+K", description: "Open global command palette" },
     ],
   },
+  {
+    title: "Annotation Editor",
+    shortcuts: [
+      { key: "E", description: "Toggle annotation edit mode" },
+      { key: "D", description: "Toggle draw new bounding box tool" },
+      { key: "Del / ⌫", description: "Delete selected bounding box" },
+      { key: "↑ ↓ ← →", description: "Nudge selected box (Shift for large step)" },
+      { key: "⌘Z / Ctrl+Z", description: "Undo last annotation edit" },
+      { key: "⇧⌘Z / Ctrl+Y", description: "Redo last undone edit" },
+    ],
+  },
 ];
 
 export const ShortcutsDialog: React.FC<ShortcutsDialogProps> = ({

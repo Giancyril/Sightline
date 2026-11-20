@@ -17,6 +17,8 @@ import {
   XCircle,
   Download,
   Video,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
@@ -215,6 +217,50 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         action: () => {
           onNavigate("detect");
           onOpenChange(false);
+        },
+      },
+
+      {
+        id: "act-undo",
+        label: "Undo annotation edit",
+        description: "Revert the last annotation change",
+        icon: <Undo2 className="w-4 h-4" />,
+        group: "Actions",
+        shortcut: isMac ? "⌘Z" : "Ctrl+Z",
+        keywords: ["undo", "revert", "history", "edit"],
+        action: () => {
+          onNavigate("detect");
+          onOpenChange(false);
+          window.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "z",
+              ctrlKey: !isMac,
+              metaKey: isMac,
+              bubbles: true,
+            })
+          );
+        },
+      },
+      {
+        id: "act-redo",
+        label: "Redo annotation edit",
+        description: "Re-apply the last undone annotation change",
+        icon: <Redo2 className="w-4 h-4" />,
+        group: "Actions",
+        shortcut: isMac ? "⇧⌘Z" : "Ctrl+Y",
+        keywords: ["redo", "repeat", "history", "edit"],
+        action: () => {
+          onNavigate("detect");
+          onOpenChange(false);
+          window.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "z",
+              shiftKey: true,
+              ctrlKey: !isMac,
+              metaKey: isMac,
+              bubbles: true,
+            })
+          );
         },
       },
 

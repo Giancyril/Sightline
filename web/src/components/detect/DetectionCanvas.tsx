@@ -20,6 +20,8 @@ import {
   Pencil,
   Crosshair,
   Trash2,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import type { DetectionItem, NormalizedBBox } from "../../types.ts";
 import { colorForClass } from "../../lib/colors.ts";
@@ -28,6 +30,8 @@ import {
   createInitialEditorState,
   moveBox,
   clampBBox,
+  canUndo,
+  canRedo,
   type EditorBox,
 } from "../../lib/editorReducer.ts";
 import { Tooltip } from "../ui/Tooltip";
@@ -40,6 +44,8 @@ export interface DetectionCanvasRef {
   toggleBoxes: () => void;
   resetView: () => void;
   toggleEditMode: () => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 export type HandleType = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
@@ -389,6 +395,8 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
         setPan({ x: 0, y: 0 });
       },
       toggleEditMode,
+      undo: () => editorDispatch({ type: "UNDO" }),
+      redo: () => editorDispatch({ type: "REDO" }),
     }));
 
     // Render loop
@@ -657,6 +665,16 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
           onSelectDetection(null);
         } else if (isEdit && (e.key === "d" || e.key === "D")) {
           setIsDrawTool((prev) => !prev);
+        } else if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            if (canRedo(editorState)) editorDispatch({ type: "REDO" });
+          } else {
+            if (canUndo(editorState)) editorDispatch({ type: "UNDO" });
+          }
+        } else if (e.ctrlKey && (e.key === "y" || e.key === "Y")) {
+          e.preventDefault();
+          if (canRedo(editorState)) editorDispatch({ type: "REDO" });
         } else if (
           isEdit &&
           editorState.selectedId &&
@@ -685,7 +703,7 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
     }, [
-      editorState.selectedId,
+      editorState,
       isEdit,
       isDrawTool,
       onSelectDetection,
@@ -1117,6 +1135,41 @@ export const DetectionCanvas = forwardRef<DetectionCanvasRef, DetectionCanvasPro
                   />
                 </div>
               ) : null}
+
+              <div className="h-3.5 w-px bg-border-subtle mx-0.5 shrink-0" />
+              <Tooltip content="Undo (⌘Z / Ctrl+Z)">
+                <button
+                  type="button"
+                  disabled={!canUndo(editorState)}
+                  onClick={() => editorDispatch({ type: "UNDO" })}
+                  className={cn(
+                    "p-1.5 rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand shrink-0",
+                    canUndo(editorState)
+                      ? "text-text-secondary hover:text-text-primary hover:bg-elevated"
+                      : "text-text-tertiary/40 cursor-not-allowed"
+                  )}
+                  aria-label="Undo last change"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                </button>
+              </Tooltip>
+
+              <Tooltip content="Redo (⇧⌘Z / Ctrl+Y)">
+                <button
+                  type="button"
+                  disabled={!canRedo(editorState)}
+                  onClick={() => editorDispatch({ type: "REDO" })}
+                  className={cn(
+                    "p-1.5 rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand shrink-0",
+                    canRedo(editorState)
+                      ? "text-text-secondary hover:text-text-primary hover:bg-elevated"
+                      : "text-text-tertiary/40 cursor-not-allowed"
+                  )}
+                  aria-label="Redo last change"
+                >
+                  <Redo2 className="w-3.5 h-3.5" />
+                </button>
+              </Tooltip>
             </>
           )}
 
