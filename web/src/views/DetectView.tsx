@@ -6,7 +6,7 @@ import React, {
   Suspense,
   lazy,
 } from "react";
-import { Upload, Camera, RefreshCw, X, HelpCircle, Sparkles } from "lucide-react";
+import { Upload, Camera, RefreshCw, X, HelpCircle } from "lucide-react";
 import { DetectionCanvas, type DetectionCanvasRef } from "../components/detect/DetectionCanvas";
 import { EmptyStateDropzone } from "../components/detect/EmptyStateDropzone";
 import { Inspector } from "../components/detect/Inspector";
@@ -344,7 +344,7 @@ export const DetectView: React.FC<DetectViewProps> = ({
   }, [imagePreview, clientFilteredDetections.length]);
 
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-140px)] min-h-[580px] max-[899px]:h-auto gap-3">
+    <div className="flex flex-col w-full min-h-[calc(100vh-160px)] gap-3 pb-8">
       {/* Screen-reader aria-live announcement */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement}
@@ -373,11 +373,10 @@ export const DetectView: React.FC<DetectViewProps> = ({
                 setMode("upload");
                 if (!imagePreview) handleClear();
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                mode === "upload"
-                  ? "bg-card text-text-primary shadow-sm border border-border-subtle"
-                  : "text-text-tertiary hover:text-text-primary"
-              }`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${mode === "upload"
+                ? "bg-card text-text-primary shadow-sm border border-border-subtle"
+                : "text-text-tertiary hover:text-text-primary"
+                }`}
             >
               <Upload className="w-3.5 h-3.5" />
               <span>Image</span>
@@ -385,11 +384,10 @@ export const DetectView: React.FC<DetectViewProps> = ({
             <button
               type="button"
               onClick={() => setMode("webcam")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                mode === "webcam"
-                  ? "bg-card text-text-primary shadow-sm border border-border-subtle"
-                  : "text-text-tertiary hover:text-text-primary"
-              }`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${mode === "webcam"
+                ? "bg-card text-text-primary shadow-sm border border-border-subtle"
+                : "text-text-tertiary hover:text-text-primary"
+                }`}
             >
               <Camera className="w-3.5 h-3.5" />
               <span>Webcam</span>
@@ -397,13 +395,11 @@ export const DetectView: React.FC<DetectViewProps> = ({
             <button
               type="button"
               onClick={() => setMode("queue")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                mode === "queue"
-                  ? "bg-card text-text-primary shadow-sm border border-border-subtle"
-                  : "text-text-tertiary hover:text-text-primary"
-              }`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${mode === "queue"
+                ? "bg-card text-text-primary shadow-sm border border-border-subtle"
+                : "text-text-tertiary hover:text-text-primary"
+                }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-brand" />
               <span>Review Queue</span>
               <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-brand/10 text-brand font-mono font-semibold">
                 {reviewQueue.filter((i) => i.status === "pending").length}
@@ -416,8 +412,8 @@ export const DetectView: React.FC<DetectViewProps> = ({
               {rawResult?.image_dimensions
                 ? `${rawResult.image_dimensions.width}×${rawResult.image_dimensions.height} px`
                 : currentQueueItem
-                ? `${currentQueueItem.imageDimensions.width}×${currentQueueItem.imageDimensions.height} px`
-                : "Active image"}
+                  ? `${currentQueueItem.imageDimensions.width}×${currentQueueItem.imageDimensions.height} px`
+                  : "Active image"}
             </span>
           )}
         </div>
@@ -505,7 +501,7 @@ export const DetectView: React.FC<DetectViewProps> = ({
         </div>
       ) : (
         /* Two-Pane Workspace: Canvas (~68%) + Inspector (~32%) */
-        <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col gap-3 min-h-0">
           {/* Active Learning Review Queue Bar if in Queue Mode */}
           {isQueueMode && (
             <ReviewQueue
@@ -518,9 +514,9 @@ export const DetectView: React.FC<DetectViewProps> = ({
             />
           )}
 
-          <div className="flex-1 flex flex-col min-[900px]:flex-row gap-4 min-h-0 overflow-hidden max-[899px]:overflow-visible">
+          <div className="flex-1 flex flex-col min-[900px]:flex-row gap-4 min-h-[520px]">
             {/* Left: Canvas Area (~68%) */}
-            <div className="flex-[68] min-w-0 h-full max-[899px]:h-[440px] flex flex-col overflow-hidden">
+            <div className="flex-[68] min-w-0 min-h-[480px] h-[560px] max-[899px]:h-[440px] flex flex-col">
               <DetectionCanvas
                 ref={canvasRef}
                 imageSrc={activeImageSrc}
@@ -534,7 +530,7 @@ export const DetectView: React.FC<DetectViewProps> = ({
             </div>
 
             {/* Right: Inspector Pane (~32%) */}
-            <div className="flex-[32] min-w-[300px] max-w-[420px] max-[899px]:max-w-none max-[899px]:w-full h-full max-[899px]:h-[480px] shrink-0 overflow-hidden">
+            <div className="flex-[32] min-w-[300px] max-w-[420px] max-[899px]:max-w-none max-[899px]:w-full min-h-[480px] h-[560px] max-[899px]:h-[480px] shrink-0">
               <Inspector
                 detections={activeDetections}
                 allDetections={rawResult?.detections || activeDetections}

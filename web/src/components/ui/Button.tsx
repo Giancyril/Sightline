@@ -44,9 +44,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizeStyles: Record<ButtonSize, string> = {
-      sm: "h-7 px-2.5 text-xs gap-1.5",
-      md: "h-8 px-3.5 text-sm gap-2",
-      lg: "h-10 px-4 text-base gap-2.5",
+      sm: "h-7 px-2.5 text-xs gap-1.5 whitespace-nowrap",
+      md: "h-8 px-3.5 text-sm gap-2 whitespace-nowrap",
+      lg: "h-10 px-4 text-base gap-2.5 whitespace-nowrap",
     };
 
     return (
@@ -61,7 +61,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ) : (
           leftIcon
         )}
-        <span>{children}</span>
+        <span className="inline-flex items-center gap-1.5 leading-none">{children}</span>
         {!isLoading && rightIcon}
       </button>
     );

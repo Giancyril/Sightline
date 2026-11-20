@@ -154,7 +154,9 @@ def score_image_uncertainty(
             proximity = max(0.0, 1.0 - (delta / threshold_margin))
             threshold_score += proximity
             num_near_th += 1
-            near_th_details.append(f"{cname} (score {conf:.2f} vs threshold {th:.2f}, Δ={delta:.2f})")
+            near_th_details.append(
+                f"{cname} (score {conf:.2f} vs threshold {th:.2f}, Δ={delta:.2f})"
+            )
 
     # 2. Evaluate model disagreement via Day 1 bipartite matching
     disagreement_score = 0.0
@@ -184,7 +186,8 @@ def score_image_uncertainty(
             disagree_details.append(f"Model B only: {name_b} ({conf_b:.2f})")
 
     total_score = round(
-        (threshold_score * weight_threshold) + (disagreement_score * weight_disagreement),
+        (threshold_score * weight_threshold)
+        + (disagreement_score * weight_disagreement),
         4,
     )
 
@@ -202,12 +205,12 @@ def score_image_uncertainty(
         details_str = "; ".join(disagree_details[:3])
         if len(disagree_details) > 3:
             details_str += f"; +{len(disagree_details) - 3} more"
-        reasons.append(
-            f"{num_disagree} model disagreement(s): {details_str}"
-        )
+        reasons.append(f"{num_disagree} model disagreement(s): {details_str}")
 
     if not reasons:
-        reasons.append("High confidence agreement: no detections near threshold or model disagreements")
+        reasons.append(
+            "High confidence agreement: no detections near threshold or model disagreements"
+        )
 
     return (
         total_score,
@@ -248,7 +251,9 @@ def rank_images_by_uncertainty(
         if global_threshold == 0.25 and loaded_global != 0.25:
             global_threshold = loaded_global
 
-    scored_items: list[tuple[float, int, int, str, ImageUncertaintyInput, list[str], float, float]] = []
+    scored_items: list[
+        tuple[float, int, int, str, ImageUncertaintyInput, list[str], float, float]
+    ] = []
 
     for item in items:
         tot_score, reasons, th_score, dis_score, n_th, n_dis = score_image_uncertainty(
@@ -261,15 +266,24 @@ def rank_images_by_uncertainty(
             weight_threshold=weight_threshold,
             weight_disagreement=weight_disagreement,
         )
-        scored_items.append((tot_score, n_dis, n_th, item.image_id, item, reasons, th_score, dis_score))
+        scored_items.append(
+            (tot_score, n_dis, n_th, item.image_id, item, reasons, th_score, dis_score)
+        )
 
     # Sort descending by: total score, then disagreements, then near-threshold, then image_id ascending
-    scored_items.sort(
-        key=lambda entry: (-entry[0], -entry[1], -entry[2], entry[3])
-    )
+    scored_items.sort(key=lambda entry: (-entry[0], -entry[1], -entry[2], entry[3]))
 
     ranked_results: list[RankedImage] = []
-    for rank_idx, (tot_score, n_dis, n_th, _, item, reasons, th_score, dis_score) in enumerate(scored_items, start=1):
+    for rank_idx, (
+        tot_score,
+        n_dis,
+        n_th,
+        _,
+        item,
+        reasons,
+        th_score,
+        dis_score,
+    ) in enumerate(scored_items, start=1):
         ranked_results.append(
             RankedImage(
                 image_id=item.image_id,

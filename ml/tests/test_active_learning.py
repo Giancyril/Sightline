@@ -114,24 +114,38 @@ def test_combined_ranking_multiple_images():
     # 1. Clean agreement + confident
     clean = ImageUncertaintyInput(
         image_id="img_clean",
-        detections_primary=[{"class_name": "Car", "confidence": 0.92, "box": [0.1, 0.1, 0.4, 0.4]}],
-        detections_secondary=[{"class_name": "Car", "confidence": 0.90, "box": [0.1, 0.1, 0.4, 0.4]}],
+        detections_primary=[
+            {"class_name": "Car", "confidence": 0.92, "box": [0.1, 0.1, 0.4, 0.4]}
+        ],
+        detections_secondary=[
+            {"class_name": "Car", "confidence": 0.90, "box": [0.1, 0.1, 0.4, 0.4]}
+        ],
     )
 
     # 2. Near-threshold detection only
     near_th = ImageUncertaintyInput(
         image_id="img_near_th",
-        detections_primary=[{"class_name": "Chair", "confidence": 0.28, "box": [0.1, 0.1, 0.4, 0.4]}],
-        detections_secondary=[{"class_name": "Chair", "confidence": 0.28, "box": [0.1, 0.1, 0.4, 0.4]}],
+        detections_primary=[
+            {"class_name": "Chair", "confidence": 0.28, "box": [0.1, 0.1, 0.4, 0.4]}
+        ],
+        detections_secondary=[
+            {"class_name": "Chair", "confidence": 0.28, "box": [0.1, 0.1, 0.4, 0.4]}
+        ],
     )
 
     # 3. Model disagreement only (Model B predicts another object)
     disagree = ImageUncertaintyInput(
         image_id="img_disagree",
-        detections_primary=[{"class_name": "Dog", "confidence": 0.85, "box": [0.1, 0.1, 0.4, 0.4]}],
+        detections_primary=[
+            {"class_name": "Dog", "confidence": 0.85, "box": [0.1, 0.1, 0.4, 0.4]}
+        ],
         detections_secondary=[
             {"class_name": "Dog", "confidence": 0.85, "box": [0.1, 0.1, 0.4, 0.4]},
-            {"class_name": "Person", "confidence": 0.80, "box": [0.5, 0.5, 0.9, 0.9]},  # only in B
+            {
+                "class_name": "Person",
+                "confidence": 0.80,
+                "box": [0.5, 0.5, 0.9, 0.9],
+            },  # only in B
         ],
     )
 
@@ -139,16 +153,26 @@ def test_combined_ranking_multiple_images():
     compound = ImageUncertaintyInput(
         image_id="img_compound",
         detections_primary=[
-            {"class_name": "Chair", "confidence": 0.25, "box": [0.1, 0.1, 0.4, 0.4]},  # delta=0.0 -> max th score 1.0
+            {
+                "class_name": "Chair",
+                "confidence": 0.25,
+                "box": [0.1, 0.1, 0.4, 0.4],
+            },  # delta=0.0 -> max th score 1.0
             {"class_name": "Person", "confidence": 0.85, "box": [0.5, 0.5, 0.8, 0.8]},
         ],
         detections_secondary=[
             {"class_name": "Chair", "confidence": 0.25, "box": [0.1, 0.1, 0.4, 0.4]},
-            {"class_name": "Book", "confidence": 0.75, "box": [0.7, 0.7, 0.95, 0.95]},  # disagreement in A and B
+            {
+                "class_name": "Book",
+                "confidence": 0.75,
+                "box": [0.7, 0.7, 0.95, 0.95],
+            },  # disagreement in A and B
         ],
     )
 
-    ranked = rank_images_by_uncertainty([clean, near_th, disagree, compound], global_threshold=0.25)
+    ranked = rank_images_by_uncertainty(
+        [clean, near_th, disagree, compound], global_threshold=0.25
+    )
 
     assert [r.image_id for r in ranked] == [
         "img_compound",
@@ -192,7 +216,9 @@ def test_reasons_returned_for_each_rank():
 def test_per_class_thresholds_applied():
     """Verify that Day 3 per-class thresholds override global threshold for calculating proximity."""
     # Suppose Guitar has recommended threshold 0.35, while global threshold is 0.25
-    guitar_det = [{"class_name": "Guitar", "confidence": 0.36, "box": [0.1, 0.1, 0.5, 0.5]}]
+    guitar_det = [
+        {"class_name": "Guitar", "confidence": 0.36, "box": [0.1, 0.1, 0.5, 0.5]}
+    ]
 
     # With per-class threshold (0.35), confidence 0.36 has delta 0.01 (high threshold uncertainty)
     score_custom, _, th_custom, _, n_th_custom, _ = score_image_uncertainty(
@@ -218,7 +244,9 @@ def test_per_class_thresholds_applied():
 
 def test_empty_detections_clean_reason():
     """Empty detections produce score 0.0 and clear high confidence agreement reason."""
-    item = ImageUncertaintyInput(image_id="img_empty", detections_primary=[], detections_secondary=[])
+    item = ImageUncertaintyInput(
+        image_id="img_empty", detections_primary=[], detections_secondary=[]
+    )
     score, reasons, _, _, n_th, n_dis = score_image_uncertainty(
         detections_primary=item.detections_primary,
         detections_secondary=item.detections_secondary,

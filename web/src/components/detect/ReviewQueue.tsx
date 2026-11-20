@@ -18,7 +18,6 @@ import {
   ChevronRight,
   FastForward,
   AlertTriangle,
-  Sparkles,
   ListFilter,
   Check,
   Clock,
@@ -185,7 +184,6 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
         <div className="flex flex-col gap-1 min-w-[200px]">
           <div className="flex items-center justify-between text-xs font-medium">
             <span className="flex items-center gap-1.5 text-text-primary">
-              <Sparkles className="w-3.5 h-3.5 text-brand" />
               <span>Active Learning Queue</span>
             </span>
             <span className="text-text-secondary font-mono">
@@ -296,7 +294,7 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
               {/* Action Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 {/* Previous / Next */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <Button
                     variant="secondary"
                     size="sm"
@@ -304,8 +302,10 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
                     disabled={currentIndex <= 0}
                     title="Previous item ([)"
                     aria-label="Previous item in queue"
+                    leftIcon={<ChevronLeft className="w-3.5 h-3.5" />}
                   >
-                    <ChevronLeft className="w-4 h-4 mr-0.5" /> Prev <Kbd className="ml-1 text-[10px]">[</Kbd>
+                    <span>Prev</span>
+                    <Kbd className="ml-0.5 text-[10px]">[</Kbd>
                   </Button>
                   <Button
                     variant="secondary"
@@ -314,8 +314,10 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
                     disabled={currentIndex >= queue.length - 1}
                     title="Next item (])"
                     aria-label="Next item in queue"
+                    rightIcon={<ChevronRight className="w-3.5 h-3.5" />}
                   >
-                    Next <Kbd className="ml-1 text-[10px]">]</Kbd> <ChevronRight className="w-4 h-4 ml-0.5" />
+                    <span>Next</span>
+                    <Kbd className="ml-0.5 text-[10px]">]</Kbd>
                   </Button>
                 </div>
 
@@ -328,8 +330,10 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
                     title="Skip candidate (S)"
                     aria-label="Skip candidate image"
                     className="text-amber-500 hover:text-amber-400 hover:bg-amber-500/10"
+                    leftIcon={<FastForward className="w-3.5 h-3.5" />}
                   >
-                    <FastForward className="w-3.5 h-3.5 mr-1" /> Skip <Kbd className="ml-1.5 text-[10px]">S</Kbd>
+                    <span>Skip</span>
+                    <Kbd className="ml-1 text-[10px]">S</Kbd>
                   </Button>
 
                   {onSaveCorrection && (
@@ -340,8 +344,9 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
                       isLoading={isSavingCorrection}
                       title="Save manual box corrections"
                       aria-label="Save corrected boxes"
+                      leftIcon={<Edit3 className="w-3.5 h-3.5" />}
                     >
-                      <Edit3 className="w-3.5 h-3.5 mr-1" /> Save Correction
+                      Save Correction
                     </Button>
                   )}
 
@@ -352,8 +357,10 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
                     title="Mark verified without changes (R)"
                     aria-label="Mark candidate as reviewed"
                     className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                    leftIcon={<CheckCircle2 className="w-3.5 h-3.5" />}
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark Reviewed <Kbd className="ml-1.5 text-[10px] bg-emerald-700 text-white">R</Kbd>
+                    <span>Mark Reviewed</span>
+                    <Kbd className="ml-1 text-[10px] bg-emerald-700 text-white">R</Kbd>
                   </Button>
                 </div>
               </div>

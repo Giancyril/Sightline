@@ -23,7 +23,7 @@ export interface ErrorCodeSpec {
 
 export interface EndpointSpec {
   id: string;
-  method: "POST" | "GET";
+  method: "POST" | "GET" | "DELETE";
   path: string;
   summary: string;
   description: string;
@@ -861,5 +861,256 @@ print("Line OUT:", summary["line_counts"]["total_out"])`,
   "duration_s": 12.4
 }`,
   },
+  {
+    id: "corrections-create",
+    method: "POST",
+    path: "/v1/corrections",
+    summary: "Submit corrected annotations for an image",
+    description:
+      "Stores human-corrected bounding box annotations in COCO JSON format on disk under /data/corrections/. " +
+      "Privacy default: NO image bytes are stored. Only annotations, model_id, model_version, and a SHA-256 image hash are persisted. " +
+      "Set store_image=true to additionally store the image. Returns HTTP 201 with correction_id.",
+    parameters: [
+      {
+        name: "image_hash",
+        in: "formData",
+        type: "string (hex, 32-64 chars)",
+        required: true,
+        description: "SHA-256 hex digest of the image (lowercase). Identifies the image without storing bytes.",
+      },
+      {
+        name: "model_id",
+        in: "formData",
+        type: "string",
+        required: true,
+        description: "Model identifier that produced the original predictions (e.g. 'fine-tuned').",
+      },
+      {
+        name: "model_version",
+        in: "formData",
+        type: "string",
+        required: true,
+        description: "Semantic version of the model checkpoint (e.g. 'v1.0.0').",
+      },
+      {
+        name: "image_width",
+        in: "formData",
+        type: "integer",
+        required: true,
+        description: "Width of the original image in pixels.",
+      },
+      {
+        name: "image_height",
+        in: "formData",
+        type: "integer",
+        required: true,
+        description: "Height of the original image in pixels.",
+      },
+      {
+        name: "annotations",
+        in: "formData",
+        type: "array<object>",
+        required: true,
+        description:
+          "Corrected bounding-box annotation objects. Each entry must include class_id, class_name, and box_normalized (ymin, xmin, ymax, xmax — all 0-1).",
+      },
+      {
+        name: "store_image",
+        in: "formData",
+        type: "boolean",
+        required: false,
+        default: "false",
+        description: "Opt-in flag. If true, image_data bytes are stored alongside the COCO JSON. Defaults to false (privacy-safe).",
+      },
+    ],
+    responseFields: [
+      { field: "correction_id", type: "string (UUID)", description: "Unique identifier for the saved correction record" },
+      { field: "image_hash", type: "string", description: "SHA-256 hex digest of the image as provided" },
+      { field: "model_id", type: "string", description: "Model identifier" },
+      { field: "model_version", type: "string", description: "Model version" },
+      { field: "annotation_count", type: "integer", description: "Number of corrected bounding boxes stored" },
+      { field: "store_image", type: "boolean", description: "Whether image bytes were stored" },
+      { field: "created_at", type: "string (ISO 8601)", description: "Timestamp when the correction was saved" },
+      { field: "coco_path", type: "string", description: "Relative filesystem path of the saved COCO JSON file" },
+    ],
+    errorCodes: [
+      { status: 201, name: "Created", description: "Correction saved successfully (HTTP 201, not 200)" },
+      { status: 422, name: "Validation Error", description: "image_hash format invalid, missing required fields, or degenerate bounding box" },
+      { status: 500, name: "Internal Server Error", description: "Failed to write COCO JSON to disk" },
+    ],
+    snippets: {
+      curl: `curl -X POST "${API_DOCS_DISPLAY_BASE_URL}/v1/corrections" \\
+  -H "Content-Type: application/json" \\
+  -d '{"image_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","model_id":"fine-tuned","model_version":"v1.0.0","image_width":1280,"image_height":720,"store_image":false,"annotations":[{"class_id":2,"class_name":"Laptop","box_normalized":{"ymin":0.34,"xmin":0.21,"ymax":0.78,"xmax":0.66}}]}'`,
+      js: `const payload = {
+  image_hash: sha256Hex,
+  model_id: "fine-tuned",
+  model_version: "v1.0.0",
+  image_width: 1280,
+  image_height: 720,
+  store_image: false,
+  annotations: correctedBoxes,
+};
+const res = await fetch(\`${API_DOCS_DISPLAY_BASE_URL}/v1/corrections\`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload),
+});
+const data = await res.json(); // res.status === 201
+console.log("Saved correction:", data.correction_id);`,
+      python: `import requests
+res = requests.post(
+    "${API_DOCS_DISPLAY_BASE_URL}/v1/corrections",
+    json={
+        "image_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "model_id": "fine-tuned", "model_version": "v1.0.0",
+        "image_width": 1280, "image_height": 720, "store_image": False,
+        "annotations": [{"class_id": 2, "class_name": "Laptop",
+                          "box_normalized": {"ymin": 0.34, "xmin": 0.21, "ymax": 0.78, "xmax": 0.66}}],
+    }
+)
+assert res.status_code == 201
+print("Correction ID:", res.json()["correction_id"])`,
+    },
+    exampleResponse: `{
+  "correction_id": "c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5",
+  "image_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "model_id": "fine-tuned",
+  "model_version": "v1.0.0",
+  "annotation_count": 1,
+  "store_image": false,
+  "created_at": "2026-11-20T10:35:00Z",
+  "coco_path": "data/corrections/2026-11-20/c7f3a1d2.json"
+}`,
+  },
+  {
+    id: "corrections-export",
+    method: "GET",
+    path: "/v1/corrections/export",
+    summary: "Export all corrections as a COCO zip archive",
+    description:
+      "Streams a zip archive of all saved COCO JSON correction files plus a manifest.json index. " +
+      "Returns Content-Type: application/zip.",
+    parameters: [],
+    responseFields: [
+      { field: "(zip body)", type: "binary", description: "ZIP archive with all COCO JSON correction files" },
+      { field: "manifest.json", type: "object (inside zip)", description: "Index of correction_id, image_hash, model_id, and created_at for each file" },
+    ],
+    errorCodes: [
+      { status: 200, name: "OK", description: "Zip stream returned successfully" },
+      { status: 404, name: "Not Found", description: "No corrections found — data/corrections/ directory is empty" },
+    ],
+    snippets: {
+      curl: `curl -O "${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/export"`,
+      js: `const res = await fetch(\`${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/export\`);
+const blob = await res.blob();
+const a = document.createElement("a");
+a.href = URL.createObjectURL(blob);
+a.download = "corrections_export.zip";
+a.click();`,
+      python: `import requests
+res = requests.get("${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/export", stream=True)
+with open("corrections_export.zip", "wb") as f:
+    for chunk in res.iter_content(chunk_size=8192): f.write(chunk)`,
+    },
+    exampleResponse: `# Returns application/zip binary stream.
+# manifest.json structure inside the zip:
+{
+  "exported_at": "2026-11-20T10:40:00Z",
+  "total_corrections": 1,
+  "corrections": [{"correction_id": "c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5",
+    "image_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "model_id": "fine-tuned", "created_at": "2026-11-20T10:35:00Z",
+    "coco_file": "c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5.json"}]
+}`,
+  },
+  {
+    id: "corrections-get",
+    method: "GET",
+    path: "/v1/corrections/{correction_id}",
+    summary: "Retrieve a single correction COCO document",
+    description:
+      "Returns the full COCO-format JSON document for a specific correction by UUID, " +
+      "including images[], annotations[], categories[], and a metadata envelope.",
+    parameters: [
+      {
+        name: "correction_id",
+        in: "path",
+        type: "string (UUID)",
+        required: true,
+        description: "UUID of the correction as returned by POST /v1/corrections.",
+      },
+    ],
+    responseFields: [
+      { field: "metadata.correction_id", type: "string", description: "UUID of this correction record" },
+      { field: "metadata.image_hash", type: "string", description: "SHA-256 of the source image" },
+      { field: "metadata.model_id", type: "string", description: "Model that produced the original predictions" },
+      { field: "metadata.store_image", type: "boolean", description: "Whether image bytes were stored" },
+      { field: "images[]", type: "array<object>", description: "COCO images array (id, width, height, file_name)" },
+      { field: "annotations[]", type: "array<object>", description: "COCO annotations (id, image_id, category_id, bbox, area)" },
+      { field: "categories[]", type: "array<object>", description: "COCO categories (id, name)" },
+    ],
+    errorCodes: [
+      { status: 404, name: "Not Found", description: "No correction found with the given UUID" },
+    ],
+    snippets: {
+      curl: `curl "${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5"`,
+      js: `const res = await fetch(\`${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/\${correctionId}\`);
+const doc = await res.json();
+console.log("Annotations:", doc.annotations.length);`,
+      python: `import requests
+res = requests.get(f"${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/{correction_id}")
+doc = res.json()
+print(f"Annotations: {len(doc['annotations'])}")`,
+    },
+    exampleResponse: `{
+  "metadata": {"correction_id": "c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5",
+    "image_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "model_id": "fine-tuned", "model_version": "v1.0.0", "store_image": false},
+  "images": [{"id": "c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5", "width": 1280, "height": 720,
+               "file_name": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.jpg"}],
+  "annotations": [{"id": 1, "image_id": "c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5",
+                   "category_id": 2, "bbox": [268, 244, 570, 316], "area": 180120, "iscrowd": 0}],
+  "categories": [{"id": 2, "name": "Laptop"}]
+}`,
+  },
+  {
+    id: "corrections-delete",
+    method: "DELETE",
+    path: "/v1/corrections/{correction_id}",
+    summary: "Delete a correction record and any stored image",
+    description:
+      "Permanently deletes the COCO JSON file and, if store_image was true, the associated image file. " +
+      "Returns HTTP 204 No Content on success.",
+    parameters: [
+      {
+        name: "correction_id",
+        in: "path",
+        type: "string (UUID)",
+        required: true,
+        description: "UUID of the correction to delete.",
+      },
+    ],
+    responseFields: [
+      { field: "(empty body)", type: "none", description: "HTTP 204 No Content on success" },
+    ],
+    errorCodes: [
+      { status: 204, name: "No Content", description: "Correction deleted successfully" },
+      { status: 404, name: "Not Found", description: "No correction found with the given UUID" },
+    ],
+    snippets: {
+      curl: `curl -X DELETE "${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/c7f3a1d2-84b0-4e9f-b2c1-af8d349e01f5"`,
+      js: `const res = await fetch(
+  \`${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/\${correctionId}\`,
+  { method: "DELETE" }
+);
+if (res.status === 204) console.log("Correction deleted");`,
+      python: `import requests
+res = requests.delete(f"${API_DOCS_DISPLAY_BASE_URL}/v1/corrections/{correction_id}")
+assert res.status_code == 204`,
+    },
+    exampleResponse: `# HTTP 204 No Content (empty body)`,
+  },
+
 ];
 

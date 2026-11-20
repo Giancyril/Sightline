@@ -300,4 +300,3 @@ class CorrectionResponse(BaseModel):
         ..., description="Whether raw image was stored via user opt-in"
     )
     coco_path: str = Field(..., description="Relative storage path to COCO JSON")
-

@@ -270,4 +270,3 @@ def coco_to_image_records(
         records.append(rec)
 
     return records
-

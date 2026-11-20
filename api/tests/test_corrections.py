@@ -136,7 +136,9 @@ def test_post_corrections_default_privacy_zero_image(tmp_corrections_dir: Path):
 
 def test_post_corrections_explicit_image_opt_in(tmp_corrections_dir: Path):
     """Test user opt-in: image is safely saved when store_image=True."""
-    dummy_img = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb"
+    dummy_img = (
+        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb"
+    )
     b64_img = base64.b64encode(dummy_img).decode("ascii")
     sha = hashlib.sha256(dummy_img).hexdigest()
 
@@ -297,7 +299,9 @@ def test_export_corrections_zip_round_trip(tmp_corrections_dir: Path, tmp_path: 
     export_response = export_corrections_zip(include_images=True)
     assert export_response.status_code == 200
     assert "application/zip" in export_response.media_type
-    assert "corrections_coco_export.zip" in export_response.headers.get("Content-Disposition", "")
+    assert "corrections_coco_export.zip" in export_response.headers.get(
+        "Content-Disposition", ""
+    )
 
     # 3. Read ZIP file from memory
     zip_bytes = export_response.body
@@ -348,4 +352,3 @@ def test_export_corrections_zip_round_trip(tmp_corrections_dir: Path, tmp_path: 
         assert abs(reloaded.annotations[0].xmin - 0.2) < 1e-4
         assert reloaded.annotations[1].label == "Chair"
         assert reloaded.annotations[1].label_id == 3
-
