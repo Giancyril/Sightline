@@ -9,16 +9,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from api.schemas import (
+    ClassThresholdResponseItem,
     ModelInfoResponse,
     ModelMetrics,
     ModelRegistryItem,
     ModelsResponse,
+    ModelThresholdsResponse,
 )
 from api.services.detector import MAX_FILE_SIZE_BYTES, get_model_cache
-from ml.models.registry import load_model_registry
+from ml.models.registry import get_model_entry, load_model_registry
 
 router = APIRouter(prefix="/v1", tags=["Model Metadata"])
 
@@ -105,3 +107,58 @@ def list_models() -> ModelsResponse:
         )
 
     return ModelsResponse(total_models=len(items), models=items)
+
+
+@router.get(
+    "/models/{model_id}/thresholds",
+    response_model=ModelThresholdsResponse,
+    summary="Get recommended per-class thresholds and evaluation metrics for a model",
+    description="Returns the calibrated per-class thresholds table, precision, recall, and fallback status.",
+    responses={
+        200: {"description": "Per-class thresholds table."},
+        404: {
+            "description": "Model not found or model does not have a threshold file."
+        },
+    },
+)
+def get_model_thresholds(model_id: str) -> ModelThresholdsResponse:
+    """Return per-class threshold table for a specific model."""
+    entry = get_model_entry(model_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown model_id: '{model_id}'",
+        )
+    if entry.thresholds is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Model '{model_id}' does not have recommended thresholds or calibration files.",
+        )
+
+    t = entry.thresholds
+    return ModelThresholdsResponse(
+        model_id=t.model_id,
+        rule=t.rule,
+        date=t.date,
+        data_hash=t.data_hash,
+        global_threshold=t.global_threshold,
+        fallbacks=t.fallbacks,
+        thresholds=t.thresholds,
+        per_class=[
+            ClassThresholdResponseItem(
+                class_id=c.class_id,
+                class_name=c.class_name,
+                threshold=c.threshold,
+                precision=c.precision,
+                recall=c.recall,
+                f1=c.f1,
+                precision_raw=c.precision_raw,
+                recall_raw=c.recall_raw,
+                f1_raw=c.f1_raw,
+                num_detections=c.num_detections,
+                fell_back=c.fell_back,
+                fallback_reason=c.fallback_reason,
+            )
+            for c in t.per_class
+        ],
+    )

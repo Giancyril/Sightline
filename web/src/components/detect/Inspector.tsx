@@ -14,6 +14,8 @@ import {
   ArrowDown,
   Pin,
   Cpu,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import type { DetectionItem, ModelRegistryItem } from "../../types";
 import { fetchModels } from "../../api";
@@ -23,6 +25,7 @@ import { Button } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { Badge } from "../ui/Badge";
 import { cn } from "../../lib/utils";
+import { PerClassThresholdEditor } from "./PerClassThresholdEditor";
 
 interface InspectorProps {
   detections: DetectionItem[];
@@ -42,6 +45,12 @@ interface InspectorProps {
   isApiOffline?: boolean;
   selectedModelId?: string;
   onModelChange?: (modelId: string) => void;
+  /** Current threshold mode sent to the API */
+  thresholdMode: "global" | "recommended" | "custom";
+  onThresholdModeChange: (mode: "global" | "recommended" | "custom") => void;
+  /** Custom per-class threshold overrides: class_name -> threshold */
+  customThresholds: Record<string, number>;
+  onCustomThresholdsChange: (overrides: Record<string, number>) => void;
   className?: string;
 }
 
@@ -64,6 +73,10 @@ export const Inspector: React.FC<InspectorProps> = ({
   isApiOffline = false,
   selectedModelId = "fine-tuned",
   onModelChange,
+  thresholdMode,
+  onThresholdModeChange,
+  customThresholds,
+  onCustomThresholdsChange,
   className,
 }) => {
   // Model registry state
@@ -391,6 +404,56 @@ export const Inspector: React.FC<InspectorProps> = ({
           onValueChange={onNmsChange}
           formatValue={(v) => `${(v * 100).toFixed(0)}%`}
         />
+
+        {/* Recommended Thresholds Toggle */}
+        <div className="flex flex-col gap-2 pt-1 border-t border-border-subtle">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-medium text-text-secondary">Recommended thresholds</span>
+              <span className="text-[10px] text-text-tertiary leading-snug">
+                {thresholdMode === "global"
+                  ? "Using global threshold for all classes"
+                  : thresholdMode === "recommended"
+                  ? "Using per-class optimised thresholds"
+                  : "Using custom per-class thresholds"}
+              </span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={thresholdMode !== "global"}
+              onClick={() => {
+                if (thresholdMode === "global") {
+                  onThresholdModeChange("recommended");
+                } else {
+                  onThresholdModeChange("global");
+                }
+              }}
+              className="shrink-0 ml-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-full"
+              title={thresholdMode !== "global" ? "Disable recommended thresholds" : "Enable recommended thresholds"}
+            >
+              {thresholdMode !== "global" ? (
+                <ToggleRight className="w-7 h-7 text-brand" />
+              ) : (
+                <ToggleLeft className="w-7 h-7 text-text-tertiary" />
+              )}
+            </button>
+          </div>
+
+          {/* Per-class editor — shown when in recommended or custom mode */}
+          {thresholdMode !== "global" && (
+            <div className="mt-1">
+              <PerClassThresholdEditor
+                modelId={selectedModelId}
+                customThresholds={customThresholds}
+                onChange={(overrides) => {
+                  onCustomThresholdsChange(overrides);
+                  onThresholdModeChange("custom");
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 3. Class Filter Chips */}

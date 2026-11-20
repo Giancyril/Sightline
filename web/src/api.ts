@@ -4,6 +4,7 @@ import type {
   DetectionResponse,
   ModelInfoResponse,
   ModelsResponse,
+  ModelThresholdsResponse,
   VideoJobStatus,
   VideoSummary,
   VideoUploadResponse,
@@ -17,7 +18,9 @@ export async function detectImage(
   imageBlob: Blob | File,
   confidenceThreshold: number = 0.25,
   nmsIouThreshold: number = 0.45,
-  modelId?: string
+  modelId?: string,
+  thresholdMode: "global" | "recommended" | "custom" = "global",
+  customThresholds?: Record<string, number>
 ): Promise<DetectionResponse> {
   const formData = new FormData();
   formData.append("file", imageBlob, "image.jpg");
@@ -27,6 +30,12 @@ export async function detectImage(
   url.searchParams.set("nms_iou_threshold", nmsIouThreshold.toString());
   if (modelId) {
     url.searchParams.set("model_id", modelId);
+  }
+  if (thresholdMode) {
+    url.searchParams.set("threshold_mode", thresholdMode);
+  }
+  if (thresholdMode === "custom" && customThresholds) {
+    url.searchParams.set("custom_thresholds", JSON.stringify(customThresholds));
   }
 
   const response = await fetch(url.toString(), {
@@ -47,6 +56,19 @@ export async function detectImage(
     throw new Error(errorDetail);
   }
 
+  return response.json();
+}
+
+export async function fetchModelThresholds(
+  modelId: string
+): Promise<ModelThresholdsResponse> {
+  const response = await fetch(`${API_BASE_URL}/v1/models/${modelId}/thresholds`);
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(`No threshold file for model "${modelId}"`);
+    }
+    throw new Error(`Failed to fetch thresholds: ${response.statusText}`);
+  }
   return response.json();
 }
 

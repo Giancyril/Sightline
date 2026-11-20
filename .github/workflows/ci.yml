@@ -28,7 +28,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ruff pytest pytest-asyncio httpx torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
-          pip install fastapi uvicorn pydantic python-multipart pillow numpy pyyaml opencv-python-headless
+          pip install fastapi uvicorn pydantic python-multipart pillow numpy pyyaml opencv-python-headless scipy matplotlib
 
       - name: Ruff Lint
         run: python -m ruff check ml/ api/ scripts/
