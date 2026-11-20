@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import classes, compare, detect, model, video
+from api.routers import classes, compare, corrections, detect, model, video
 from api.schemas import HealthResponse
 from api.services.detector import get_detector
 from api.services.video_jobs import start_cleanup_task
@@ -59,6 +59,7 @@ app.include_router(compare.router)
 app.include_router(classes.router)
 app.include_router(model.router)
 app.include_router(video.router)
+app.include_router(corrections.router)
 
 
 @app.get("/healthz", response_model=HealthResponse, tags=["Health"])

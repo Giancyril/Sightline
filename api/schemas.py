@@ -238,3 +238,66 @@ class ModelThresholdsResponse(BaseModel):
     per_class: list[ClassThresholdResponseItem] = Field(
         default_factory=list, description="Detailed per-class thresholds and metrics"
     )
+
+
+class CorrectionAnnotation(BaseModel):
+    """Single corrected bounding box annotation."""
+
+    class_id: int = Field(..., ge=1, le=20, description="1-indexed class ID (1-20)")
+    class_name: str = Field(..., description="Human-readable class name")
+    box_normalized: NormalizedBBox = Field(
+        ..., description="Normalized coordinates [0, 1]"
+    )
+    confidence: float | None = Field(
+        default=1.0, ge=0.0, le=1.0, description="Confidence score"
+    )
+    is_manual: bool = Field(
+        default=True, description="Whether annotation was manually drawn or edited"
+    )
+
+
+class CorrectionCreateRequest(BaseModel):
+    """Request payload for storing user corrections."""
+
+    image_hash: str = Field(
+        ...,
+        pattern=r"^[a-fA-F0-9]{32,64}$",
+        description="SHA-256 hash of the target image",
+    )
+    image_dimensions: ImageDimensions = Field(
+        ..., description="Dimensions of the corrected image"
+    )
+    corrected_boxes: list[CorrectionAnnotation] = Field(
+        ..., description="List of corrected annotations"
+    )
+    original_detections: list[DetectionItem] = Field(
+        default_factory=list, description="Original model detections prior to edit"
+    )
+    model_id: str = Field(default="fine-tuned", description="Model registry ID")
+    model_version: str = Field(default="v1.0", description="Model version")
+    store_image: bool = Field(
+        default=False,
+        description="Explicit user opt-in to store raw image bytes. Default is False (zero image storage).",
+    )
+    image_base64: str | None = Field(
+        default=None,
+        description="Base64-encoded image payload; stored only if store_image is True.",
+    )
+
+
+class CorrectionResponse(BaseModel):
+    """Response payload returned when a correction is stored."""
+
+    id: str = Field(..., description="Unique correction ID")
+    image_hash: str = Field(..., description="SHA-256 hash of target image")
+    created_at: str = Field(..., description="ISO 8601 creation timestamp")
+    model_id: str = Field(..., description="Model registry ID")
+    model_version: str = Field(..., description="Model version")
+    total_annotations: int = Field(
+        ..., ge=0, description="Number of corrected annotations"
+    )
+    has_image: bool = Field(
+        ..., description="Whether raw image was stored via user opt-in"
+    )
+    coco_path: str = Field(..., description="Relative storage path to COCO JSON")
+

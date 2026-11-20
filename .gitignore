@@ -61,6 +61,7 @@ ml/data/cache/
 /dataset/
 /datasets/
 /data/
+/data/corrections/
 
 # Model Checkpoints, Weights, and Exports (>5MB limit)
 ml/checkpoints/*
