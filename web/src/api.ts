@@ -1,6 +1,8 @@
 import type {
   ClassesResponse,
   CompareResponse,
+  CorrectionCreateRequest,
+  CorrectionResponse,
   DetectionResponse,
   ModelInfoResponse,
   ModelsResponse,
@@ -248,4 +250,36 @@ export async function fetchVideoSummary(
   }
   return response.json();
 }
+
+export async function saveCorrection(
+  payload: CorrectionCreateRequest
+): Promise<CorrectionResponse> {
+  const response = await fetch(`${API_BASE_URL}/v1/corrections`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let errorDetail = `Failed to save correction with status ${response.status}`;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) {
+        errorDetail = errJson.detail;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(errorDetail);
+  }
+
+  return response.json();
+}
+
+export function getCorrectionsExportUrl(): string {
+  return `${API_BASE_URL}/v1/corrections/export`;
+}
+
 

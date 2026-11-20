@@ -6,16 +6,18 @@ import React, {
   Suspense,
   lazy,
 } from "react";
-import { Upload, Camera, RefreshCw, X, HelpCircle } from "lucide-react";
+import { Upload, Camera, RefreshCw, X, HelpCircle, Sparkles } from "lucide-react";
 import { DetectionCanvas, type DetectionCanvasRef } from "../components/detect/DetectionCanvas";
 import { EmptyStateDropzone } from "../components/detect/EmptyStateDropzone";
 import { Inspector } from "../components/detect/Inspector";
 import { ExportMenu } from "../components/detect/ExportMenu";
 import { ShortcutsDialog } from "../components/detect/ShortcutsDialog";
+import { ReviewQueue } from "../components/detect/ReviewQueue";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
-import { detectImage } from "../api";
-import type { DetectionResponse, HistoryRecord } from "../types";
+import { detectImage, saveCorrection } from "../api";
+import { createDefaultReviewQueue } from "../lib/activeLearning";
+import type { DetectionResponse, HistoryRecord, ReviewQueueItem, ReviewStatus } from "../types";
 
 // Lazy-load webcam workspace module
 const WebcamWorkspace = lazy(() => import("../components/detect/WebcamWorkspace"));
@@ -29,11 +31,18 @@ export const DetectView: React.FC<DetectViewProps> = ({
   onSaveHistory,
   initialRecord,
 }) => {
-  const [mode, setMode] = useState<"upload" | "webcam">("upload");
+  const [mode, setMode] = useState<"upload" | "webcam" | "queue">("upload");
   const [imagePreview, setImagePreview] = useState<string | null>(
     () => initialRecord?.thumbnail || initialRecord?.previewUrl || null
   );
   const [currentBlob, setCurrentBlob] = useState<Blob | null>(null);
+
+  // Active Learning Review Queue State
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>(() =>
+    createDefaultReviewQueue()
+  );
+  const [reviewIndex, setReviewIndex] = useState<number>(0);
+  const [isSavingCorrection, setIsSavingCorrection] = useState<boolean>(false);
 
   // Upload progress & inference state
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -218,6 +227,59 @@ export const DetectView: React.FC<DetectViewProps> = ({
     return rawResult.detections.filter((d) => d.confidence >= confThreshold);
   }, [rawResult, confThreshold]);
 
+  const isQueueMode = mode === "queue";
+  const currentQueueItem = isQueueMode ? reviewQueue[reviewIndex] || null : null;
+
+  const activeImageSrc = isQueueMode
+    ? currentQueueItem?.imageSrc || null
+    : imagePreview;
+
+  const activeDetections = isQueueMode
+    ? currentQueueItem?.detections || []
+    : clientFilteredDetections;
+
+  const handleUpdateReviewStatus = (itemId: string, status: ReviewStatus) => {
+    setReviewQueue((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, status, reviewedAt: new Date().toISOString() }
+          : item
+      )
+    );
+  };
+
+  const handleSaveCorrectionFromQueue = async () => {
+    if (!currentQueueItem) return;
+    setIsSavingCorrection(true);
+    try {
+      await saveCorrection({
+        image_hash: currentQueueItem.imageHash,
+        image_dimensions: {
+          width: currentQueueItem.imageDimensions.width,
+          height: currentQueueItem.imageDimensions.height,
+          channels: 3,
+        },
+        corrected_boxes: currentQueueItem.detections.map((d) => ({
+          class_id: d.class_id,
+          class_name: d.class_name,
+          box_normalized: d.box_normalized,
+          confidence: d.confidence,
+          is_manual: true,
+        })),
+        original_detections: currentQueueItem.detections,
+        store_image: false,
+      });
+      handleUpdateReviewStatus(currentQueueItem.id, "corrected");
+      setAnnouncement(`Correction saved for ${currentQueueItem.imageName}`);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to save correction"
+      );
+    } finally {
+      setIsSavingCorrection(false);
+    }
+  };
+
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -332,12 +394,29 @@ export const DetectView: React.FC<DetectViewProps> = ({
               <Camera className="w-3.5 h-3.5" />
               <span>Webcam</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setMode("queue")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-[4px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                mode === "queue"
+                  ? "bg-card text-text-primary shadow-sm border border-border-subtle"
+                  : "text-text-tertiary hover:text-text-primary"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-brand" />
+              <span>Review Queue</span>
+              <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-brand/10 text-brand font-mono font-semibold">
+                {reviewQueue.filter((i) => i.status === "pending").length}
+              </span>
+            </button>
           </div>
 
-          {imagePreview && (
+          {activeImageSrc && (
             <span className="text-[11px] font-mono text-text-tertiary hidden sm:inline">
               {rawResult?.image_dimensions
                 ? `${rawResult.image_dimensions.width}×${rawResult.image_dimensions.height} px`
+                : currentQueueItem
+                ? `${currentQueueItem.imageDimensions.width}×${currentQueueItem.imageDimensions.height} px`
                 : "Active image"}
             </span>
           )}
@@ -415,7 +494,7 @@ export const DetectView: React.FC<DetectViewProps> = ({
             onExitWebcam={() => setMode("upload")}
           />
         </Suspense>
-      ) : !imagePreview ? (
+      ) : !activeImageSrc ? (
         /* Empty State Dropzone */
         <div className="flex-1 flex items-center justify-center py-8">
           <EmptyStateDropzone
@@ -426,46 +505,60 @@ export const DetectView: React.FC<DetectViewProps> = ({
         </div>
       ) : (
         /* Two-Pane Workspace: Canvas (~68%) + Inspector (~32%) */
-        <div className="flex-1 flex flex-col min-[900px]:flex-row gap-4 min-h-0 overflow-hidden max-[899px]:overflow-visible">
-          {/* Left: Canvas Area (~68%) */}
-          <div className="flex-[68] min-w-0 h-full max-[899px]:h-[440px] flex flex-col overflow-hidden">
-            <DetectionCanvas
-              ref={canvasRef}
-              imageSrc={imagePreview}
-              detections={clientFilteredDetections}
-              selectedIndex={selectedIndex}
-              onSelectDetection={setSelectedIndex}
-              hoveredIndex={hoveredIndex}
-              onHoverDetection={setHoveredIndex}
-              enableComparison={true}
+        <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden">
+          {/* Active Learning Review Queue Bar if in Queue Mode */}
+          {isQueueMode && (
+            <ReviewQueue
+              queue={reviewQueue}
+              currentIndex={reviewIndex}
+              onSelectIndex={setReviewIndex}
+              onUpdateStatus={handleUpdateReviewStatus}
+              onSaveCorrection={handleSaveCorrectionFromQueue}
+              isSavingCorrection={isSavingCorrection}
             />
-          </div>
+          )}
 
-          {/* Right: Inspector Pane (~32%) */}
-          <div className="flex-[32] min-w-[300px] max-w-[420px] max-[899px]:max-w-none max-[899px]:w-full h-full max-[899px]:h-[480px] shrink-0 overflow-hidden">
-            <Inspector
-              detections={clientFilteredDetections}
-              allDetections={rawResult?.detections || []}
-              inferenceMs={rawResult?.inference_time_ms ?? null}
-              confThreshold={confThreshold}
-              nmsThreshold={nmsThreshold}
-              onConfChange={setConfThreshold}
-              onNmsChange={handleNmsChange}
-              selectedIndex={selectedIndex}
-              onSelectIndex={setSelectedIndex}
-              hoveredIndex={hoveredIndex}
-              onHoverIndex={setHoveredIndex}
-              isLoading={isDetecting}
-              errorMsg={errorMsg}
-              onRetry={handleRetry}
-              isApiOffline={isApiOffline}
-              selectedModelId={selectedModelId}
-              onModelChange={handleModelChange}
-              thresholdMode={thresholdMode}
-              onThresholdModeChange={handleThresholdModeChange}
-              customThresholds={customThresholds}
-              onCustomThresholdsChange={handleCustomThresholdsChange}
-            />
+          <div className="flex-1 flex flex-col min-[900px]:flex-row gap-4 min-h-0 overflow-hidden max-[899px]:overflow-visible">
+            {/* Left: Canvas Area (~68%) */}
+            <div className="flex-[68] min-w-0 h-full max-[899px]:h-[440px] flex flex-col overflow-hidden">
+              <DetectionCanvas
+                ref={canvasRef}
+                imageSrc={activeImageSrc}
+                detections={activeDetections}
+                selectedIndex={selectedIndex}
+                onSelectDetection={setSelectedIndex}
+                hoveredIndex={hoveredIndex}
+                onHoverDetection={setHoveredIndex}
+                enableComparison={true}
+              />
+            </div>
+
+            {/* Right: Inspector Pane (~32%) */}
+            <div className="flex-[32] min-w-[300px] max-w-[420px] max-[899px]:max-w-none max-[899px]:w-full h-full max-[899px]:h-[480px] shrink-0 overflow-hidden">
+              <Inspector
+                detections={activeDetections}
+                allDetections={rawResult?.detections || activeDetections}
+                inferenceMs={rawResult?.inference_time_ms ?? null}
+                confThreshold={confThreshold}
+                nmsThreshold={nmsThreshold}
+                onConfChange={setConfThreshold}
+                onNmsChange={handleNmsChange}
+                selectedIndex={selectedIndex}
+                onSelectIndex={setSelectedIndex}
+                hoveredIndex={hoveredIndex}
+                onHoverIndex={setHoveredIndex}
+                isLoading={isDetecting}
+                errorMsg={errorMsg}
+                onRetry={handleRetry}
+                isApiOffline={isApiOffline}
+                selectedModelId={selectedModelId}
+                onModelChange={handleModelChange}
+                thresholdMode={thresholdMode}
+                onThresholdModeChange={handleThresholdModeChange}
+                customThresholds={customThresholds}
+                onCustomThresholdsChange={handleCustomThresholdsChange}
+              />
+            </div>
           </div>
         </div>
       )}

@@ -45,6 +45,15 @@ const SHORTCUT_GROUPS = [
       { key: "⇧⌘Z / Ctrl+Y", description: "Redo last undone edit" },
     ],
   },
+  {
+    title: "Active Learning Queue",
+    shortcuts: [
+      { key: "R", description: "Mark candidate image as reviewed" },
+      { key: "S", description: "Skip candidate to next in queue" },
+      { key: "[", description: "Previous candidate in queue" },
+      { key: "]", description: "Next candidate in queue" },
+    ],
+  },
 ];
 
 export const ShortcutsDialog: React.FC<ShortcutsDialogProps> = ({

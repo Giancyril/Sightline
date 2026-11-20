@@ -195,3 +195,54 @@ export interface VideoSummary {
   duration_s: number;
 }
 
+export interface CorrectionAnnotation {
+  class_id: number;
+  class_name: string;
+  box_normalized: NormalizedBBox;
+  confidence?: number;
+  is_manual?: boolean;
+}
+
+export interface CorrectionCreateRequest {
+  image_hash: string;
+  image_dimensions: { width: number; height: number; channels?: number };
+  corrected_boxes: CorrectionAnnotation[];
+  original_detections?: DetectionItem[];
+  model_id?: string;
+  model_version?: string;
+  store_image?: boolean;
+  image_base64?: string;
+}
+
+export interface CorrectionResponse {
+  id: string;
+  image_hash: string;
+  created_at: string;
+  model_id: string;
+  model_version: string;
+  total_annotations: number;
+  has_image: boolean;
+  coco_path: string;
+}
+
+export type ReviewStatus = "pending" | "reviewed" | "skipped" | "corrected";
+
+export interface ReviewQueueItem {
+  id: string;
+  imageSrc: string;
+  imageName: string;
+  imageHash: string;
+  imageDimensions: { width: number; height: number };
+  detections: DetectionItem[];
+  detectionsSecondary?: DetectionItem[];
+  status: ReviewStatus;
+  score: number;
+  rank: number;
+  reasons: string[];
+  thresholdScore: number;
+  disagreementScore: number;
+  numNearThreshold: number;
+  numDisagreements: number;
+  reviewedAt?: string;
+}
+
