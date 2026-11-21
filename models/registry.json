@@ -38,6 +38,46 @@
       }
     },
     {
+      "id": "fine-tuned-tflite-dr",
+      "display_name": "SSD MobileNet V2 (Open Images 20-Class, TFLite Dynamic-Range INT8)",
+      "version": "v1.1.0",
+      "path": "ml/export/ssd_mobilenet_v2_dynamic_range.tflite",
+      "input_size": [300, 300],
+      "class_list": [
+        "Person",
+        "Laptop",
+        "Chair",
+        "Book",
+        "Backpack",
+        "Cell phone",
+        "Bottle",
+        "Clock",
+        "Car",
+        "Dog",
+        "Guitar",
+        "Microphone",
+        "Helmet",
+        "Headphones",
+        "Wheelchair",
+        "Whiteboard",
+        "Flashlight",
+        "Calculator",
+        "Stapler",
+        "Wrench"
+      ],
+      "metrics": {
+        "mAP_all": 0.2642,
+        "mAP_coco_shared": 0.3469,
+        "mAP_novel_classes": 0.1814,
+        "coco_mAP_50_95": 0.1601,
+        "file_size_mb": 7.79,
+        "compression_ratio": 3.9,
+        "map_loss_vs_fp32": 0.0002,
+        "latency_p50_ms": 131.0,
+        "latency_p95_ms": 134.9
+      }
+    },
+    {
       "id": "coco-baseline",
       "display_name": "SSD MobileNet V2 (COCO Pre-trained Baseline)",
       "version": "v0.9.0",
