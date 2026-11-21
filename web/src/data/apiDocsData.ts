@@ -1111,6 +1111,121 @@ assert res.status_code == 204`,
     },
     exampleResponse: `# HTTP 204 No Content (empty body)`,
   },
+  {
+    id: "metrics",
+    method: "GET",
+    path: "/metrics",
+    summary: "Prometheus metrics exposition",
+    description:
+      "Returns real-time API counters, latency histograms, detection counts, confidence distributions, and model usage in Prometheus text format (0.0.4).",
+    parameters: [],
+    responseFields: [
+      { field: "(raw text)", type: "string", description: "Standard Prometheus exposition format text" },
+    ],
+    errorCodes: [
+      { status: 200, name: "OK", description: "Prometheus plaintext metrics generated successfully" },
+    ],
+    snippets: {
+      curl: `curl "${API_DOCS_DISPLAY_BASE_URL}/metrics"`,
+      js: `const res = await fetch(\`${API_DOCS_DISPLAY_BASE_URL}/metrics\`);
+const metricsText = await res.text();
+console.log(metricsText);`,
+      python: `import requests
+res = requests.get(f"${API_DOCS_DISPLAY_BASE_URL}/metrics")
+print(res.text)`,
+    },
+    exampleResponse: `# HELP api_requests_total Total HTTP requests
+# TYPE api_requests_total counter
+api_requests_total{endpoint="/v1/detect",method="POST",status="2xx"} 42.0
 
+# HELP inference_latency_seconds Inference latency histogram
+# TYPE inference_latency_seconds histogram
+inference_latency_seconds_bucket{le="0.1"} 12.0
+inference_latency_seconds_bucket{le="0.2"} 42.0
+inference_latency_seconds_count 42.0
+inference_latency_seconds_sum 4.95`,
+  },
+  {
+    id: "drift",
+    method: "GET",
+    path: "/v1/drift",
+    summary: "Confidence distribution drift status",
+    description:
+      "Calculates Population Stability Index (PSI) comparing the rolling 500-inference confidence distribution against the baseline validation distribution.",
+    parameters: [],
+    responseFields: [
+      { field: "psi", type: "number", description: "Population Stability Index (<0.1 nominal, 0.1-0.2 warning, >=0.2 drift)" },
+      { field: "status", type: "string", description: "Nominal, warning, or drift" },
+      { field: "sample_count", type: "number", description: "Number of observations in the rolling window" },
+      { field: "baseline_distribution", type: "number[]", description: "Validation baseline density across 10 confidence bins" },
+      { field: "live_distribution", type: "number[]", description: "Live observed density across 10 confidence bins" },
+    ],
+    errorCodes: [
+      { status: 200, name: "OK", description: "Drift analysis report generated successfully" },
+    ],
+    snippets: {
+      curl: `curl "${API_DOCS_DISPLAY_BASE_URL}/v1/drift"`,
+      js: `const res = await fetch(\`${API_DOCS_DISPLAY_BASE_URL}/v1/drift\`);
+const driftReport = await res.json();
+console.log("Drift Status:", driftReport.status, "PSI:", driftReport.psi);`,
+      python: `import requests
+res = requests.get(f"${API_DOCS_DISPLAY_BASE_URL}/v1/drift")
+report = res.json()
+print(f"PSI: {report['psi']:.4f} ({report['status']})")`,
+    },
+    exampleResponse: `{
+  "psi": 0.0384,
+  "status": "nominal",
+  "threshold": 0.2,
+  "sample_count": 500,
+  "baseline_distribution": [0.05, 0.08, 0.12, 0.18, 0.22, 0.15, 0.1, 0.06, 0.03, 0.01],
+  "live_distribution": [0.04, 0.07, 0.13, 0.19, 0.21, 0.16, 0.1, 0.06, 0.03, 0.01]
+}`,
+  },
+  {
+    id: "operations",
+    method: "GET",
+    path: "/v1/operations",
+    summary: "Operations dashboard telemetry",
+    description:
+      "Consolidated telemetry payload powering the frontend Operations view, containing latency percentiles, error rates, model info, and drift evaluation.",
+    parameters: [],
+    responseFields: [
+      { field: "model_id", type: "string", description: "Currently active model ID" },
+      { field: "model_version", type: "string", description: "Model deployment version" },
+      { field: "display_name", type: "string", description: "Human-readable model name" },
+      { field: "total_requests", type: "number", description: "Total processed requests" },
+      { field: "error_rate", type: "number", description: "Fraction of failed requests" },
+      { field: "latency_p50_ms", type: "number", description: "50th percentile latency in ms" },
+      { field: "latency_p95_ms", type: "number", description: "95th percentile latency in ms" },
+      { field: "drift", type: "object", description: "Nested drift report object" },
+    ],
+    errorCodes: [
+      { status: 200, name: "OK", description: "Telemetry collected successfully" },
+    ],
+    snippets: {
+      curl: `curl "${API_DOCS_DISPLAY_BASE_URL}/v1/operations"`,
+      js: `const res = await fetch(\`${API_DOCS_DISPLAY_BASE_URL}/v1/operations\`);
+const opsTelemetry = await res.json();
+console.log("Telemetry:", opsTelemetry);`,
+      python: `import requests
+res = requests.get(f"${API_DOCS_DISPLAY_BASE_URL}/v1/operations")
+print(res.json())`,
+    },
+    exampleResponse: `{
+  "model_id": "fine-tuned",
+  "model_version": "v1.1.0",
+  "display_name": "SSD MobileNet V2 (Open Images 20-Class)",
+  "total_requests": 142,
+  "error_rate": 0.0,
+  "latency_p50_ms": 118.4,
+  "latency_p95_ms": 139.2,
+  "drift": {
+    "psi": 0.0384,
+    "status": "nominal",
+    "threshold": 0.2
+  }
+}`,
+  },
 ];
 
