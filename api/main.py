@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.logging_config import JSONRequestLoggingMiddleware, configure_json_logging
 from api.middleware.request_id import RequestIDMiddleware
-from api.routers import classes, compare, corrections, detect, model, video
+from api.routers import classes, compare, corrections, detect, metrics, model, video
 from api.schemas import HealthResponse
 from api.services.detector import get_detector
 from api.services.video_jobs import start_cleanup_task
@@ -70,6 +70,7 @@ app.include_router(classes.router)
 app.include_router(model.router)
 app.include_router(video.router)
 app.include_router(corrections.router)
+app.include_router(metrics.router)
 
 
 @app.get("/healthz", response_model=HealthResponse, tags=["Health"])

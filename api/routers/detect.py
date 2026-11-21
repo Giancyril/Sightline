@@ -13,6 +13,7 @@ from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 
 from api.schemas import DetectionResponse
 from api.services.detector import ImageValidationError, UnknownModelError, get_detector
+from api.services.metrics import get_metrics_collector
 
 router = APIRouter(prefix="/v1", tags=["Detection"])
 
@@ -135,8 +136,17 @@ def detect_objects(
         )
 
         # Expose model identity in response headers
-        response.headers["X-Model-Id"] = result.get("model_id", resolved_model_id)
+        active_model_id = result.get("model_id", resolved_model_id)
+        response.headers["X-Model-Id"] = active_model_id
         response.headers["X-Model-Version"] = result.get("model_version", "")
+
+        # Record inference metrics in Prometheus collector
+        detections_list = result.get("detections", [])
+        get_metrics_collector().record_detections(
+            model_id=active_model_id,
+            detection_count=len(detections_list),
+            confidences=[float(d.get("confidence", 0.0)) for d in detections_list],
+        )
 
         return DetectionResponse(**result)
     except UnknownModelError as e:
