@@ -15,10 +15,15 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.logging_config import JSONRequestLoggingMiddleware, configure_json_logging
+from api.middleware.request_id import RequestIDMiddleware
 from api.routers import classes, compare, corrections, detect, model, video
 from api.schemas import HealthResponse
 from api.services.detector import get_detector
 from api.services.video_jobs import start_cleanup_task
+
+
+configure_json_logging()
 
 
 @asynccontextmanager
@@ -43,6 +48,11 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Request-id middleware — must be added before the JSON logging middleware
+# so that request.state.request_id is available when the log line is emitted.
+app.add_middleware(JSONRequestLoggingMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 # CORS middleware for frontend clients (React/Vite dev server and production)
 app.add_middleware(
