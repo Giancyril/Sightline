@@ -28,6 +28,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from api.services.metrics import get_metrics_collector
+
 logger = logging.getLogger("api.requests")
 
 
@@ -59,6 +61,15 @@ class JSONRequestLoggingMiddleware(BaseHTTPMiddleware):
             "model_id": model_id,
         }
         logger.info(json.dumps(record))
+
+        # Update Prometheus metrics
+        get_metrics_collector().record_request(
+            route=request.url.path,
+            method=request.method,
+            status=response.status_code,
+            latency_s=latency_ms / 1000.0,
+        )
+
         return response
 
 
