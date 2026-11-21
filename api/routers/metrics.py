@@ -7,10 +7,13 @@ Accessible at GET /metrics and GET /v1/metrics for Prometheus scrapers and ops d
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from api.services.metrics import get_metrics_collector
+from ml.eval.drift import get_drift_detector
 
 router = APIRouter(tags=["Metrics"])
 
@@ -33,3 +36,13 @@ def prometheus_metrics() -> PlainTextResponse:
         content=text,
         media_type="text/plain; version=0.0.4; charset=utf-8",
     )
+
+
+@router.get(
+    "/v1/drift",
+    summary="Confidence distribution drift status",
+    description="Returns Population Stability Index (PSI), baseline vs live distributions, and nominal/warning status.",
+)
+def get_drift_status() -> dict[str, Any]:
+    """Evaluate real-time confidence distribution drift against validation baseline."""
+    return get_drift_detector().check_drift().to_dict()
