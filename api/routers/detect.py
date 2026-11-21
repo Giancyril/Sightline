@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 from api.schemas import DetectionResponse
 from api.services.detector import ImageValidationError, UnknownModelError, get_detector
 from api.services.metrics import get_metrics_collector
+from ml.eval.drift import get_drift_detector
 
 router = APIRouter(prefix="/v1", tags=["Detection"])
 
@@ -142,11 +143,16 @@ def detect_objects(
 
         # Record inference metrics in Prometheus collector
         detections_list = result.get("detections", [])
+        confidences = [float(d.get("confidence", 0.0)) for d in detections_list]
         get_metrics_collector().record_detections(
             model_id=active_model_id,
             detection_count=len(detections_list),
-            confidences=[float(d.get("confidence", 0.0)) for d in detections_list],
+            confidences=confidences,
         )
+
+        # Ingest live detection confidences for real-time drift tracking
+        if confidences:
+            get_drift_detector().record_confidences(confidences)
 
         return DetectionResponse(**result)
     except UnknownModelError as e:
