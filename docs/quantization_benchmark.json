@@ -1,0 +1,81 @@
+{
+  "benchmark_timestamp": "2026-11-21T14:51:55Z",
+  "threshold_mAP_loss": 0.01,
+  "variants": {
+    "pytorch_fp32": {
+      "name": "PyTorch Float32 Baseline",
+      "format": "pytorch_state_dict",
+      "accuracy": {
+        "mAP_50": 0.2644,
+        "coco_mAP": 0.1603
+      },
+      "map_loss": 0.0,
+      "latency": {
+        "p50_latency_ms": 111.78,
+        "p95_latency_ms": 125.51,
+        "mean_latency_ms": 111.2,
+        "std_latency_ms": 12.31,
+        "throughput_fps": 8.9,
+        "sample_count": 5
+      },
+      "file_size": {
+        "exists": true,
+        "size_bytes": 31851123,
+        "size_mb": 30.38,
+        "path": "ml\\export\\ssd_mobilenet_v2_openimages20_weights.pth"
+      },
+      "compression_ratio": 1.0,
+      "passed_threshold": true
+    },
+    "tflite_dynamic_range": {
+      "name": "TFLite Dynamic-Range (INT8 Weights)",
+      "format": "tflite_dynamic_range",
+      "accuracy": {
+        "mAP_50": 0.2642,
+        "coco_mAP": 0.1601
+      },
+      "map_loss": 0.0002,
+      "latency": {
+        "p50_latency_ms": 131.03,
+        "p95_latency_ms": 134.85,
+        "mean_latency_ms": 126.5,
+        "std_latency_ms": 8.51,
+        "throughput_fps": 7.6,
+        "sample_count": 5
+      },
+      "file_size": {
+        "exists": true,
+        "size_bytes": 8163467,
+        "size_mb": 7.79,
+        "path": "ml\\export\\ssd_mobilenet_v2_dynamic_range.tflite"
+      },
+      "compression_ratio": 3.9,
+      "passed_threshold": true
+    }
+  },
+  "summary_table": [
+    {
+      "variant": "pytorch_fp32",
+      "name": "PyTorch Float32 Baseline",
+      "mAP_50": 0.2644,
+      "mAP_loss": 0.0,
+      "p50_ms": 111.78,
+      "p95_ms": 125.51,
+      "size_mb": 30.38,
+      "compression": "1.0x",
+      "gate_passed": true
+    },
+    {
+      "variant": "tflite_dynamic_range",
+      "name": "TFLite Dynamic-Range (INT8 Weights)",
+      "mAP_50": 0.2642,
+      "mAP_loss": 0.0002,
+      "p50_ms": 131.03,
+      "p95_ms": 134.85,
+      "size_mb": 7.79,
+      "compression": "3.9x",
+      "gate_passed": true
+    }
+  ],
+  "all_passed_accuracy_gate": true
+}
