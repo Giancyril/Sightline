@@ -19,12 +19,21 @@ import {
   Video,
   Undo2,
   Redo2,
+  Activity,
 } from "lucide-react";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { cn } from "../../lib/utils";
 import { useTheme, type Theme } from "../../lib/theme";
 
-export type NavTab = "detect" | "compare" | "video" | "history" | "model" | "api" | "dev";
+export type NavTab =
+  | "detect"
+  | "compare"
+  | "video"
+  | "history"
+  | "model"
+  | "operations"
+  | "api"
+  | "dev";
 
 interface CommandItem {
   id: string;
@@ -117,6 +126,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         keywords: ["model", "metrics", "accuracy", "map", "benchmark", "performance"],
         action: () => {
           onNavigate("model");
+          onOpenChange(false);
+        },
+      },
+      {
+        id: "nav-operations",
+        label: "Operations & Telemetry",
+        description: "Latency p50/p95, error rates, and confidence drift monitoring",
+        icon: <Activity className="w-4 h-4" />,
+        group: "Navigate",
+        keywords: ["operations", "ops", "telemetry", "latency", "p50", "p95", "drift", "metrics", "prometheus"],
+        action: () => {
+          onNavigate("operations");
           onOpenChange(false);
         },
       },

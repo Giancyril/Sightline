@@ -5,6 +5,7 @@ import { CompareView } from "./views/CompareView";
 import { VideoView } from "./views/VideoView";
 import { HistoryView } from "./views/HistoryView";
 import { ModelView } from "./views/ModelView";
+import { OperationsView } from "./views/OperationsView";
 import { ApiDocsView } from "./views/ApiDocsView";
 import { DevComponentsView } from "./views/DevComponentsView";
 import { ThemeToggle } from "./components/ui/ThemeToggle";
@@ -30,7 +31,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     if (typeof window !== "undefined") {
       const urlTab = new URLSearchParams(window.location.search).get("tab") as NavTab | null;
-      if (urlTab && ["detect", "compare", "video", "history", "model", "api", "dev"].includes(urlTab)) {
+      if (urlTab && ["detect", "compare", "video", "history", "model", "operations", "api", "dev"].includes(urlTab)) {
         return urlTab;
       }
       if (
@@ -243,6 +244,19 @@ export function App() {
 
               <button
                 type="button"
+                onClick={() => handleTabChange("operations")}
+                className={cn(
+                  "relative h-12 flex items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
+                  activeTab === "operations"
+                    ? "text-text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-brand"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
+              >
+                Operations
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleTabChange("api")}
                 className={cn(
                   "relative h-12 flex items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
@@ -358,6 +372,15 @@ export function App() {
               description="SSD MobileNet V2 architecture specifications, validation benchmarks, and class taxonomy."
             />
             <ModelView />
+          </PageContainer>
+        )}
+        {activeTab === "operations" && (
+          <PageContainer>
+            <PageHeader
+              title="Operations & Telemetry"
+              description="Real-time latency SLAs (p50/p95), error rates, confidence distribution drift, and model health."
+            />
+            <OperationsView onNavigateToDetect={() => handleTabChange("detect")} />
           </PageContainer>
         )}
         {activeTab === "api" && (

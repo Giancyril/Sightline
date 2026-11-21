@@ -46,3 +46,22 @@ def prometheus_metrics() -> PlainTextResponse:
 def get_drift_status() -> dict[str, Any]:
     """Evaluate real-time confidence distribution drift against validation baseline."""
     return get_drift_detector().check_drift().to_dict()
+
+
+@router.get(
+    "/v1/operations",
+    summary="Operations dashboard telemetry",
+    description="Returns live p50/p95 latency, error rates, confidence distribution drift, and model status.",
+)
+def get_operations_telemetry() -> dict[str, Any]:
+    """Consolidated telemetry payload for the frontend Operations dashboard."""
+    ops_summary = get_metrics_collector().get_operations_summary()
+    drift_report = get_drift_detector().check_drift().to_dict()
+
+    return {
+        "model_id": "fine-tuned",
+        "model_version": "v1.1.0",
+        "display_name": "SSD MobileNet V2 (Open Images 20-Class)",
+        **ops_summary,
+        "drift": drift_report,
+    }
