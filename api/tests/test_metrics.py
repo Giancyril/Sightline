@@ -25,10 +25,7 @@ import pytest
 from api.main import app
 from api.routers.metrics import prometheus_metrics
 from api.services.metrics import (
-    CONFIDENCE_BUCKETS,
-    DETECTION_COUNT_BUCKETS,
     LATENCY_BUCKETS,
-    MetricsCollector,
     get_metrics_collector,
 )
 

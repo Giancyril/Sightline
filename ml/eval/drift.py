@@ -16,9 +16,10 @@ import collections
 import json
 import math
 import threading
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import ClassVar, Sequence
+from typing import ClassVar
 
 # Validation baseline counts across 10 confidence bins [0.0-0.1, 0.1-0.2, ..., 0.9-1.0]
 # Sourced from models/fine-tuned/calibration.json (2,000 validation detections)

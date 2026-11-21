@@ -87,19 +87,15 @@ class MetricsCollector:
             self.model_usage_total: dict[str, float] = {}
 
             # Histograms: {bucket_le: count}, sum, count
-            self.latency_buckets: dict[float, float] = {b: 0.0 for b in LATENCY_BUCKETS}
+            self.latency_buckets: dict[float, float] = dict.fromkeys(LATENCY_BUCKETS, 0.0)
             self.latency_sum: float = 0.0
             self.latency_count: float = 0.0
 
-            self.detections_buckets: dict[float, float] = {
-                b: 0.0 for b in DETECTION_COUNT_BUCKETS
-            }
+            self.detections_buckets: dict[float, float] = dict.fromkeys(DETECTION_COUNT_BUCKETS, 0.0)
             self.detections_sum: float = 0.0
             self.detections_count: float = 0.0
 
-            self.confidence_buckets: dict[float, float] = {
-                b: 0.0 for b in CONFIDENCE_BUCKETS
-            }
+            self.confidence_buckets: dict[float, float] = dict.fromkeys(CONFIDENCE_BUCKETS, 0.0)
             self.confidence_sum: float = 0.0
             self.confidence_count: float = 0.0
 
