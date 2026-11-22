@@ -246,3 +246,34 @@ export interface ReviewQueueItem {
   reviewedAt?: string;
 }
 
+export interface OperationsTelemetry {
+  model_id: string;
+  model_version: string;
+  display_name: string;
+  total_requests: number;
+  total_errors: number;
+  error_rate_pct: number;
+  p50_latency_ms: number;
+  p95_latency_ms: number;
+  timeline: Array<{
+    timestamp: number;
+    latency_ms: number;
+    status: number;
+    is_error: boolean;
+    route: string;
+  }>;
+  model_usage: Record<string, number>;
+  drift: {
+    status: "ok" | "warning";
+    psi: number;
+    threshold: number;
+    sample_count: number;
+    min_samples: number;
+    min_samples_reached: boolean;
+    baseline_distribution: number[];
+    live_distribution: number[];
+    bin_edges: number[];
+    message: string;
+  };
+}
+

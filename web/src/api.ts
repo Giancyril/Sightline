@@ -7,6 +7,7 @@ import type {
   ModelInfoResponse,
   ModelsResponse,
   ModelThresholdsResponse,
+  OperationsTelemetry,
   VideoJobStatus,
   VideoSummary,
   VideoUploadResponse,
@@ -280,6 +281,14 @@ export async function saveCorrection(
 
 export function getCorrectionsExportUrl(): string {
   return `${API_BASE_URL}/v1/corrections/export`;
+}
+
+export async function fetchOperationsTelemetry(): Promise<OperationsTelemetry> {
+  const response = await fetch(`${API_BASE_URL}/v1/operations`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch operations telemetry: ${response.statusText}`);
+  }
+  return response.json();
 }
 
 

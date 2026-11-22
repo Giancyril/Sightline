@@ -15,13 +15,15 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.logging_config import JSONRequestLoggingMiddleware, configure_json_logging
+from api.logging_config import (
+    JSONRequestLoggingMiddleware,
+    configure_json_logging,
+)
 from api.middleware.request_id import RequestIDMiddleware
 from api.routers import classes, compare, corrections, detect, metrics, model, video
 from api.schemas import HealthResponse
 from api.services.detector import get_detector
 from api.services.video_jobs import start_cleanup_task
-
 
 configure_json_logging()
 

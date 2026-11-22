@@ -14,8 +14,10 @@ Collects and renders metrics in Prometheus text format (version 0.0.4):
 
 from __future__ import annotations
 
+import collections
 import threading
-from typing import ClassVar
+import time
+from typing import Any, ClassVar
 
 LATENCY_BUCKETS: tuple[float, ...] = (
     0.005,
@@ -85,21 +87,28 @@ class MetricsCollector:
             self.model_usage_total: dict[str, float] = {}
 
             # Histograms: {bucket_le: count}, sum, count
-            self.latency_buckets: dict[float, float] = {b: 0.0 for b in LATENCY_BUCKETS}
+            self.latency_buckets: dict[float, float] = dict.fromkeys(
+                LATENCY_BUCKETS, 0.0
+            )
             self.latency_sum: float = 0.0
             self.latency_count: float = 0.0
 
-            self.detections_buckets: dict[float, float] = {
-                b: 0.0 for b in DETECTION_COUNT_BUCKETS
-            }
+            self.detections_buckets: dict[float, float] = dict.fromkeys(
+                DETECTION_COUNT_BUCKETS, 0.0
+            )
             self.detections_sum: float = 0.0
             self.detections_count: float = 0.0
 
-            self.confidence_buckets: dict[float, float] = {
-                b: 0.0 for b in CONFIDENCE_BUCKETS
-            }
+            self.confidence_buckets: dict[float, float] = dict.fromkeys(
+                CONFIDENCE_BUCKETS, 0.0
+            )
             self.confidence_sum: float = 0.0
             self.confidence_count: float = 0.0
+
+            # Rolling window of recent requests for live timeline & p50/p95 calculations
+            self.recent_requests: collections.deque[dict[str, Any]] = collections.deque(
+                maxlen=100
+            )
 
     def record_request(
         self, route: str, method: str, status: int, latency_s: float
@@ -125,6 +134,53 @@ class MetricsCollector:
             for b in LATENCY_BUCKETS:
                 if latency_s <= b:
                     self.latency_buckets[b] += 1.0
+
+            # Store recent request for operations timeline
+            self.recent_requests.append(
+                {
+                    "timestamp": round(time.time(), 2),
+                    "latency_ms": round(latency_s * 1000.0, 1),
+                    "status": status,
+                    "is_error": status >= 400,
+                    "route": route_key,
+                }
+            )
+
+    def get_operations_summary(self) -> dict[str, Any]:
+        """Compute live telemetry summary: p50/p95 latency, error rate, and history."""
+        with self._mutex:
+            total_req = int(self.latency_count)
+            total_err = int(sum(self.errors_total.values()))
+            err_rate = (
+                round((total_err / total_req) * 100.0, 2) if total_req > 0 else 0.0
+            )
+
+            # Calculate p50 and p95 from recent requests
+            latencies = [
+                r["latency_ms"] for r in self.recent_requests if r["latency_ms"] > 0
+            ]
+            if latencies:
+                sorted_lats = sorted(latencies)
+                n = len(sorted_lats)
+                p50_idx = int(0.50 * (n - 1))
+                p95_idx = int(0.95 * (n - 1))
+                p50 = round(sorted_lats[p50_idx], 1)
+                p95 = round(sorted_lats[p95_idx], 1)
+            else:
+                p50 = 0.0
+                p95 = 0.0
+
+            timeline = list(self.recent_requests)[-50:]
+
+            return {
+                "total_requests": total_req,
+                "total_errors": total_err,
+                "error_rate_pct": err_rate,
+                "p50_latency_ms": p50,
+                "p95_latency_ms": p95,
+                "timeline": timeline,
+                "model_usage": dict(self.model_usage_total),
+            }
 
     def record_detections(
         self,
