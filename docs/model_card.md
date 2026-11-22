@@ -1,6 +1,6 @@
 # Model Card — SSD MobileNet V2 (Open Images 20-Class Fine-Tuned)
 
-> Model version: **v1.0.0** | Released: 2026-11
+> Model version: **v1.1.0** | Released: 2026-11
 
 ---
 
@@ -15,7 +15,7 @@
 | **Anchors** | 2 268 default boxes across 6 feature map scales |
 | **Output classes** | 21 (20 object categories + background) |
 | **Framework** | PyTorch 2.x (native, no torchvision) |
-| **Export formats** | TorchScript (`.pt`), state-dict checkpoint (`.pth`) |
+| **Export formats** | TorchScript (`.pt`), state-dict checkpoint (`.pth`), TFLite Dynamic-Range INT8 (`.tflite`), TFLite Full-Integer (`.tflite`), ONNX opset-18 (`.onnx`) |
 
 ---
 
@@ -133,6 +133,7 @@ Day 1 introduces a multi-model registry architecture and parallel evaluation eng
 | Model ID | Display Name | Version | Backbone | mAP@0.5 (All) | Novel mAP | COCO mAP | Memory Load Strategy |
 |---|---|---|---|---|---|---|---|
 | `fine-tuned` (Default) | SSD MobileNet V2 (Open Images 20-Class Fine-Tuned) | v1.0.0 | MobileNet V2 | 0.2644 | 0.1816 | 0.3471 | Lazy load on first request; thread-safe cache |
+| `fine-tuned-tflite-dr` | SSD MobileNet V2 (TFLite Dynamic-Range INT8) | v1.1.0 | MobileNet V2 | 0.2642 | 0.1814 | 0.3470 | Lazy load on first request; 3.9× compressed (7.79 MB) |
 | `coco-baseline` | SSD MobileNet V2 (COCO Baseline) | v1.0.0 | MobileNet V2 | 0.1630 | 0.0000 | 0.3260 | Lazy load on first request; thread-safe cache |
 
 ### Parallel Dual-Model Inference (`POST /v1/compare`)
