@@ -62,7 +62,7 @@ A production-grade, end-to-end computer vision and real-time object detection pl
 
 ---
 
-## 📸 User Interface
+## User Interface
 
 The web frontend features a modernized, professional computer vision workspace inspired by Linear, Vercel Geist, and Roboflow:
 
@@ -177,46 +177,46 @@ The core system modules flow from foundational data and mathematical transforms 
 ```mermaid
 graph LR
     subgraph CoreML ["ML Core"]
-        BBox[Bounding Box & IoU Math] --> NMS[Non-Maximum Suppression]
-        Anchors[SSD Anchor Generator] --> SSD[SSDMobileNetV2 Architecture]
-        Transforms[Normalization & Transforms] --> SSD
-        SSD --> Calibration[Temperature Scaling]
+        BBox["Bounding Box & IoU Math"] --> NMS["Non-Maximum Suppression"]
+        Anchors["SSD Anchor Generator"] --> SSD["SSDMobileNetV2 Architecture"]
+        Transforms["Normalization & Transforms"] --> SSD
+        SSD --> Calibration["Temperature Scaling"]
     end
 
     subgraph Quant ["Model Optimization"]
-        SSD --> TFLiteDR[TFLite Dynamic Range]
-        SSD --> TFLiteInt[TFLite Full Integer]
-        SSD --> ONNXMod[ONNX Export]
-        TFLiteDR --> Bench[Quantization Benchmark]
+        SSD --> TFLiteDR["TFLite Dynamic Range"]
+        SSD --> TFLiteInt["TFLite Full Integer"]
+        SSD --> ONNXMod["ONNX Export"]
+        TFLiteDR --> Bench["Quantization Benchmark"]
         TFLiteInt --> Bench
         ONNXMod --> Bench
-        Bench --> Reg[Model Registry]
+        Bench --> Reg["Model Registry"]
     end
 
     subgraph APILayer ["API & Services"]
-        Reg --> Detector[Detector Service]
-        Detector --> DetectRouter[/v1/detect]
-        Detector --> CompareRouter[/v1/compare]
-        SSD --> VideoService[Video Tracking Service]
-        VideoService --> VideoRouter[/v1/video]
+        Reg --> Detector["Detector Service"]
+        Detector --> DetectRouter["/v1/detect Endpoint"]
+        Detector --> CompareRouter["/v1/compare Endpoint"]
+        SSD --> VideoService["Video Tracking Service"]
+        VideoService --> VideoRouter["/v1/video Endpoint"]
         Calibration --> DetectRouter
     end
 
     subgraph Ops ["Observability & Active Learning"]
-        DetectRouter --> Logger[JSON Request Logger]
-        DetectRouter --> Metrics[Metrics Collector /metrics]
-        DetectRouter --> Drift[PSI Drift Detector /v1/drift]
-        DetectRouter --> Corrections[Correction Queue]
-        Metrics --> OpsRouter[/v1/operations]
+        DetectRouter --> Logger["JSON Request Logger"]
+        DetectRouter --> Metrics["Metrics Collector (/metrics)"]
+        DetectRouter --> Drift["PSI Drift Detector (/v1/drift)"]
+        DetectRouter --> Corrections["Correction Queue"]
+        Metrics --> OpsRouter["/v1/operations Endpoint"]
         Drift --> OpsRouter
     end
 
     subgraph WebUI ["React Frontend"]
-        DetectRouter --> DetectView[Detection Workspace]
-        CompareRouter --> CompareView[Model Comparison]
-        VideoRouter --> VideoView[Video Tracking View]
-        OpsRouter --> OpsView[Operations Dashboard]
-        Corrections --> ReviewView[Review Studio]
+        DetectRouter --> DetectView["Detection Workspace"]
+        CompareRouter --> CompareView["Model Comparison"]
+        VideoRouter --> VideoView["Video Tracking View"]
+        OpsRouter --> OpsView["Operations Dashboard"]
+        Corrections --> ReviewView["Review Studio"]
     end
 ```
 
